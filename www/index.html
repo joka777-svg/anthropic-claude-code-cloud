@@ -217,8 +217,8 @@ details summary{cursor:pointer;font-weight:600}
 <!-- KUNDEN (Startseite) -->
 <section class="sec" id="v-kunden">
   <div id="welcome" class="banner" hidden>
-    <p><b>Willkommen!</b> Deine Daten werden nur auf diesem Gerät gespeichert. Hast du eine Sicherung aus der Claude-Version (Datei <i>Sicherung_….json</i>)? Dann spiel sie unter „Import / Export“ ein.</p>
-    <button class="btn pri" id="welcomeBtn">Sicherung einspielen</button>
+    <p><b>Willkommen!</b> Deine Daten werden nur auf diesem Gerät gespeichert. Hast du von Claude einen Übertragungs-Code (beginnt mit <i>KFB1:</i>) oder eine Sicherungsdatei? Dann übernimm damit deine Kunden und Fahrten.</p>
+    <div class="row"><button class="btn pri" id="welcomeCode">Code einfügen</button><button class="btn" id="welcomeBtn">Sicherungsdatei wählen</button></div>
   </div>
   <div id="bkp" class="banner" hidden>
     <p id="bkpText"><b>Zeit für eine Sicherung.</b> Die Daten liegen nur auf diesem Gerät. Speichere die Sicherung in „Dateien“ (iCloud Drive), dann ist nichts verloren, wenn das iPad kaputtgeht.</p>
@@ -349,9 +349,9 @@ details summary{cursor:pointer;font-weight:600}
     <p class="note" style="margin:10px auto 0">Tabellen und Kontakte werden als Daten übernommen. Alle anderen Dateien (PDF, Word, Fotos, Angebote, Rechnungen …) werden unter „Dokumente“ gespeichert.</p>
   </div>
   <details class="panel">
-    <summary>Oder Text einfügen (z. B. Tabelle aus Chat, E-Mail oder Excel kopiert)</summary>
+    <summary>Code oder Text einfügen (Übertragungs-Code von Claude, oder eine Tabelle aus Chat, E-Mail oder Excel)</summary>
     <textarea id="iPaste" style="margin-top:10px;min-height:140px" placeholder="| Datum | Start | Ziel | Anlass | Kilometer |"></textarea>
-    <button class="btn" id="iPasteBtn" style="margin-top:8px">Text auswerten</button>
+    <button class="btn pri" id="iPasteBtn" style="margin-top:8px">Übernehmen</button>
   </details>
   <div id="iMap" class="panel" hidden></div>
 
@@ -1033,8 +1033,15 @@ async function handleFile(file) {
     parseText(text, file.name);
   } catch (e) { toast("Datei konnte nicht gelesen werden: " + e.message); }
 }
+async function decodeCode(t) {
+  if (typeof DecompressionStream === "undefined") throw new Error("Dein iPadOS ist zu alt für den Code – bitte die Sicherungsdatei verwenden.");
+  const bin = Uint8Array.from(atob(t.replace(/^KFB1:/, "").replace(/\s/g, "")), c => c.charCodeAt(0));
+  return JSON.parse(await new Response(new Blob([bin]).stream().pipeThrough(new DecompressionStream("deflate-raw"))).text());
+}
 function parseText(text, src) {
   const t = text.trim(); if (!t) return;
+  if (/^KFB1:/.test(t)) { decodeCode(t).then(j => restoreBackup(j, "Code")).then(() => { $("#iPaste").value = ""; go("kunden"); })
+    .catch(e => toast("Code konnte nicht gelesen werden: " + (e?.message || e) + " – bitte komplett kopieren.", 6000)); return; }
   if (/^[\[{]/.test(t)) { try { handleJSON(JSON.parse(t), src); return; } catch {} }
   if (/BEGIN:VCARD/i.test(t)) { importDirect("kunden", parseVCF(t), src); return; }
   const md = t.split("\n").filter(l => l.includes("|")).length >= 2 && /^\s*\|/.test(t);
@@ -1160,6 +1167,7 @@ $("#sCalc").addEventListener("click", () => { const now = num($("#s_now").value)
 /* ---------- Hinweise ---------- */
 $("#bkpBtn").addEventListener("click", backupNow);
 $("#welcomeBtn").addEventListener("click", () => go("import"));
+$("#welcomeCode").addEventListener("click", () => { go("import"); const d = $("#iPaste").closest("details"); d.open = true; d.scrollIntoView({ block: "center" }); setTimeout(() => $("#iPaste").focus(), 100); });
 function renderHints() {
   const has = S.fahrten.length || S.kunden.length, lb = S.settings.lastBackup;
   $("#welcome").hidden = !ready || !!has;
