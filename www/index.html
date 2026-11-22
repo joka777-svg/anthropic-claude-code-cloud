@@ -1,0 +1,1086 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Fahrtenbuch</title>
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Fahrtenbuch">
+<meta name="theme-color" content="#1f5a46">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<link rel="icon" type="image/png" href="icons/icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@500;600;700&family=Source+Sans+3:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<script src="vendor/xlsx.full.min.js"></script>
+<style>
+html{-webkit-text-size-adjust:100%}
+:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+body{margin:0;-webkit-tap-highlight-color:transparent}
+img{max-width:100%}
+/* Layout: werkstattartige Arbeitsfläche – Kopfzeile mit Reitern, darunter eine Spalte mit Formular, Kennzahlen und Tabelle */
+:root{
+  --bg:#f3f4f1; --surface:#ffffff; --sunk:#e8eae4; --line:#d3d7cd;
+  --fg:#1d221e; --muted:#5d665e; --accent:#1f5a46; --accent-fg:#ffffff;
+  --mark:#e2a72e; --danger:#b23a2a; --ok:#2f7a4f; --info:#2f5f9a;
+  --f-head:"Barlow Semi Condensed","Arial Narrow",system-ui,sans-serif;
+  --f-body:"Source Sans 3",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --f-mono:"JetBrains Mono",ui-monospace,Menlo,Consolas,monospace;
+  --r:8px;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#151916; --surface:#1d231f; --sunk:#252c27; --line:#36403a;
+  --fg:#e6ebe5; --muted:#9aa59c; --accent:#5fbf98; --accent-fg:#0d1a14;
+  --mark:#f0bb4a; --danger:#ef7a68; --ok:#6fcf97; --info:#8ab4ec; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#151916; --surface:#1d231f; --sunk:#252c27; --line:#36403a;
+  --fg:#e6ebe5; --muted:#9aa59c; --accent:#5fbf98; --accent-fg:#0d1a14;
+  --mark:#f0bb4a; --danger:#ef7a68; --ok:#6fcf97; --info:#8ab4ec; color-scheme:dark}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{background:var(--bg);color:var(--fg);font-family:var(--f-body);font-size:15px;line-height:1.45}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--surface)}
+.wrap{max-width:1100px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+header{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--surface);border-bottom:1px solid var(--line)}
+.hbar{display:flex;align-items:center;gap:8px 16px;flex-wrap:wrap;padding-block:10px}
+.brand{font-family:var(--f-head);font-weight:700;font-size:1.35rem;letter-spacing:.01em;display:flex;align-items:center;gap:8px}
+.brand i{display:inline-block;width:12px;height:12px;background:var(--mark);transform:rotate(45deg)}
+nav{display:flex;gap:4px;flex-wrap:wrap;margin-left:auto}
+nav button{font:600 .92rem var(--f-head);letter-spacing:.04em;text-transform:uppercase;border:0;background:none;color:var(--muted);padding:8px 11px;border-radius:6px;cursor:pointer}
+nav button[aria-current="page"]{background:var(--accent);color:var(--accent-fg)}
+nav button:hover:not([aria-current]){background:var(--sunk);color:var(--fg)}
+.status{font-size:.8rem;color:var(--muted);width:100%;margin-top:-4px}
+main{padding-block:20px 60px}
+h2{font-family:var(--f-head);font-weight:700;font-size:1.5rem;margin:0;text-wrap:balance}
+h3{font-family:var(--f-head);font-weight:600;font-size:1.1rem;margin:0 0 10px;letter-spacing:.02em}
+.sec{display:flex;flex-direction:column;gap:18px}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.between{justify-content:space-between}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:16px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px 12px}
+.grid .wide{grid-column:span 2}
+.grid .full{grid-column:1/-1}
+@media (max-width:420px){.grid .wide{grid-column:auto}}
+label{display:flex;flex-direction:column;gap:3px;font-size:.78rem;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);min-width:0}
+input,select,textarea{font:400 15px var(--f-body);color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:8px 10px;width:100%;min-width:0;text-transform:none;letter-spacing:0}
+input[type=file]{padding:6px;background:var(--surface)}
+textarea{min-height:80px;resize:vertical}
+input:focus,select:focus,textarea:focus,button:focus-visible{outline:2px solid var(--mark);outline-offset:1px}
+.btn{font:600 .95rem var(--f-body);border:1px solid var(--line);background:var(--surface);color:var(--fg);padding:8px 14px;border-radius:6px;cursor:pointer;white-space:nowrap;display:inline-flex;align-items:center;gap:6px}
+.btn:hover{background:var(--sunk)}
+.btn:disabled{opacity:.55;cursor:default}
+.btn.pri{background:var(--accent);border-color:var(--accent);color:var(--accent-fg)}
+.btn.pri:hover{filter:brightness(1.08)}
+.btn.ai{border-color:var(--mark)}
+.btn.ai::before{content:"";width:8px;height:8px;background:var(--mark);transform:rotate(45deg)}
+.btn.rec{background:var(--danger);border-color:var(--danger);color:#fff}
+.btn.del{color:var(--danger);border-color:transparent;background:none}
+.btn.del.arm{background:var(--danger);color:#fff}
+.btn.sm{padding:4px 10px;font-size:.85rem}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px}
+.kpi{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:10px 14px}
+.kpi b{display:block;font:500 1.3rem var(--f-mono);font-variant-numeric:tabular-nums}
+.kpi span{font-size:.78rem;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;font-weight:600}
+.tw{overflow-x:auto;background:var(--surface);border:1px solid var(--line);border-radius:var(--r)}
+table{border-collapse:collapse;width:100%;font-size:.93rem}
+th{font:600 .75rem var(--f-body);text-transform:uppercase;letter-spacing:.06em;color:var(--muted);text-align:left;padding:9px 10px;border-bottom:2px solid var(--line);white-space:nowrap;background:var(--surface)}
+td{padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+tr.click{cursor:pointer}
+tr.click:hover td{background:var(--sunk)}
+td.n,th.n{text-align:right;font-family:var(--f-mono);font-variant-numeric:tabular-nums;white-space:nowrap}
+td.d{font-family:var(--f-mono);white-space:nowrap;font-size:.88rem}
+.calc{color:var(--muted);font-style:italic}
+.pill{display:inline-block;font-size:.72rem;font-weight:600;letter-spacing:.04em;text-transform:uppercase;padding:2px 7px;border-radius:99px;border:1px solid var(--line);white-space:nowrap}
+.pill.g,.pill.bezahlt,.pill.angenommen,.pill.erledigt{color:var(--ok);border-color:currentColor}
+.pill.p,.pill.abgelehnt{color:var(--muted)}
+.pill.a,.pill.offen{color:var(--mark);border-color:currentColor}
+.mrow td{background:var(--sunk);font-family:var(--f-head);font-weight:600;letter-spacing:.03em}
+.muted{color:var(--muted)}
+.empty{padding:28px;text-align:center;color:var(--muted)}
+.banner{border:1px dashed var(--mark);background:color-mix(in srgb,var(--mark) 10%,var(--surface));border-radius:var(--r);padding:14px 16px;display:flex;gap:12px;flex-wrap:wrap;align-items:center;justify-content:space-between}
+.banner p{margin:0;max-width:62ch}
+.clist{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:10px}
+.ccard{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:12px 14px;cursor:pointer;text-align:left;font:inherit;color:inherit;display:flex;flex-direction:column;gap:2px;min-width:0}
+.ccard:hover{border-color:var(--accent)}
+.ccard b{font-family:var(--f-head);font-size:1.1rem;font-weight:600;overflow-wrap:anywhere}
+.ccard small{color:var(--muted);overflow-wrap:anywhere}
+.nr{font-family:var(--f-mono);font-size:.75rem;color:var(--muted)}
+.toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--fg);color:var(--bg);padding:10px 16px;border-radius:6px;font-weight:600;z-index:20;max-width:90vw}
+.drop{border:2px dashed var(--line);border-radius:var(--r);padding:20px;text-align:center;background:var(--surface)}
+.drop.over{border-color:var(--accent);background:var(--sunk)}
+.fmt{display:flex;flex-wrap:wrap;gap:6px;justify-content:center;margin-top:8px}
+.fmt span{font:500 .75rem var(--f-mono);padding:2px 6px;background:var(--sunk);border-radius:4px}
+.map{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px 12px}
+.note{font-size:.88rem;color:var(--muted);max-width:70ch;margin:0}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:6px;overflow:hidden}
+.seg button{border:0;background:var(--surface);color:var(--fg);padding:7px 12px;font:600 .88rem var(--f-body);cursor:pointer}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--accent-fg)}
+details summary{cursor:pointer;font-weight:600}
+.live{font-style:italic;color:var(--info);min-height:1.2em;margin:6px 0 0}
+.mini{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+.mini li{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap;padding:6px 0;border-bottom:1px solid var(--line)}
+.mini li .d{font-family:var(--f-mono);font-size:.85rem;white-space:nowrap}
+.mini li .grow{flex:1 1 160px;min-width:0;overflow-wrap:anywhere}
+.thumb{max-width:100%;max-height:340px;border-radius:6px;border:1px solid var(--line);display:block}
+.sub{border-top:1px solid var(--line);padding-top:14px;margin-top:16px}
+.fileic{font:500 .72rem var(--f-mono);background:var(--sunk);padding:2px 6px;border-radius:4px;text-transform:uppercase}
+@media (prefers-reduced-motion:no-preference){.toast{animation:up .2s ease-out}@keyframes up{from{opacity:0;transform:translate(-50%,8px)}}
+  .btn.rec{animation:pulse 1.2s ease-in-out infinite}@keyframes pulse{50%{filter:brightness(1.25)}}}
+</style>
+</head>
+<body>
+
+<header><div class="wrap hbar">
+  <div class="brand"><i></i>Kunden &amp; Fahrtenbuch</div>
+  <nav id="nav">
+    <button data-v="fahrten" aria-current="page">Fahrtenbuch</button>
+    <button data-v="kunden">Kunden</button>
+    <button data-v="dokumente">Dokumente</button>
+    <button data-v="import">Import / Export</button>
+    <button data-v="settings">Fahrzeug</button>
+  </nav>
+  <div class="status" id="status">Daten werden geladen …</div>
+</div></header>
+
+<main class="wrap">
+
+<!-- FAHRTENBUCH -->
+<section class="sec" id="v-fahrten">
+  <div id="welcome" class="banner" hidden>
+    <p><b>Willkommen!</b> Deine Daten werden nur auf diesem Gerät gespeichert. Hast du eine Sicherung aus der Claude-Version (Datei <i>Sicherung_….json</i>)? Dann spiel sie unter „Import / Export“ ein.</p>
+    <button class="btn pri" id="welcomeBtn">Sicherung einspielen</button>
+  </div>
+  <div id="bkp" class="banner" hidden>
+    <p id="bkpText"><b>Zeit für eine Sicherung.</b> Die Daten liegen nur auf diesem Gerät. Speichere die Sicherung in „Dateien“ (iCloud Drive), dann ist nichts verloren, wenn das iPad kaputtgeht.</p>
+    <button class="btn pri" id="bkpBtn">Jetzt sichern</button>
+  </div>
+
+  <div class="panel">
+    <div class="row between" style="margin-bottom:10px">
+      <h3 id="fTitle" style="margin:0">Neue Fahrt</h3>
+      <div class="row">
+        <button class="btn ai" type="button" id="micTrip" hidden>Fahrt einsprechen</button>
+        <button class="btn sm" id="fCancel" hidden>Bearbeiten abbrechen</button>
+      </div>
+    </div>
+    <p class="live" id="micLive" hidden></p>
+    <form id="fForm" class="grid" autocomplete="off">
+      <label>Datum<input type="date" id="f_datum" required></label>
+      <label>Start<input id="f_start" list="dlOrte" placeholder="z. B. Zuhause" required></label>
+      <label>Ziel<input id="f_ziel" list="dlOrte" placeholder="z. B. Hornbach" required></label>
+      <label>Kunde / Baustelle<input id="f_kunde" list="dlKunden" placeholder="Name oder Baustelle"></label>
+      <label>Anlass<input id="f_anlass" list="dlAnlass" placeholder="z. B. Türmontage"></label>
+      <label>Kilometer<input id="f_km" inputmode="decimal" placeholder="32"></label>
+      <label>Art<select id="f_art"><option value="g">Geschäftlich</option><option value="a">Arbeitsweg</option><option value="p">Privat</option></select></label>
+      <label>km-Stand Start<input id="f_kmS" inputmode="numeric" placeholder="optional"></label>
+      <label>km-Stand Ende<input id="f_kmE" inputmode="numeric" placeholder="optional"></label>
+      <div class="row wide" style="align-self:end">
+        <button class="btn pri" type="submit" id="fSave">Speichern</button>
+        <button class="btn" type="button" id="fBack" title="Speichert und trägt direkt die Rückfahrt (Ziel → Start) vor">Speichern + Rückfahrt</button>
+        <button class="btn del" type="button" id="fDel" hidden>Löschen</button>
+      </div>
+    </form>
+  </div>
+
+  <div class="panel row between" id="photoPanel" hidden>
+    <p class="note"><b>Fahrtenbuch abfotografiert?</b> Fotos der Seiten auswählen. Claude liest die Fahrten ab, du prüfst sie vor dem Übernehmen.</p>
+    <label class="btn ai" style="text-transform:none;letter-spacing:0;font-size:.95rem;color:var(--fg)">Fotos auswählen<input type="file" id="photoIn" accept="image/*" multiple hidden></label>
+  </div>
+
+  <div class="kpis" id="kpis"></div>
+
+  <div class="row" style="align-items:end">
+    <label style="flex:0 1 200px">Zeitraum<select id="fMonth"></select></label>
+    <label style="flex:1 1 200px">Suche<input id="fSearch" placeholder="Ort, Kunde, Anlass …"></label>
+    <button class="btn" id="report" title="Excel-Datei mit Monatsübersicht, allen Fahrten und Kilometern je Kunde für den gewählten Zeitraum">Bericht für Steuerberater (Excel)</button>
+  </div>
+  <div class="tw"><table>
+    <thead><tr><th>Datum</th><th>Start</th><th>Ziel</th><th>Kunde / Baustelle</th><th>Anlass</th><th>Art</th><th class="n">km</th><th class="n">km-Stand</th></tr></thead>
+    <tbody id="fBody"></tbody>
+  </table></div>
+  <p class="note">Kursive km-Stände sind berechnet (aus dem Anfangs-km-Stand unter „Fahrzeug“ plus allen eingetragenen Fahrten). Eine Zeile anklicken, um sie zu bearbeiten.</p>
+</section>
+
+<!-- KUNDEN -->
+<section class="sec" id="v-kunden" hidden>
+  <div class="row between">
+    <h2>Kunden</h2>
+    <div class="row">
+      <input id="kSearch" placeholder="Kunden suchen …" style="width:220px">
+      <button class="btn pri" id="kNew">Neuer Kunde</button>
+    </div>
+  </div>
+  <div class="panel" id="upcoming" hidden></div>
+  <div class="panel" id="kEdit" hidden>
+    <div class="row between" style="margin-bottom:10px">
+      <h3 id="kTitle" style="margin:0">Neuer Kunde</h3>
+      <span class="nr" id="kNr"></span>
+    </div>
+    <form id="kForm" class="grid" autocomplete="off">
+      <label>Name / Nachname<input id="k_name"></label>
+      <label>Vorname<input id="k_vorname"></label>
+      <label>Firma<input id="k_firma"></label>
+      <label>Ansprechpartner<input id="k_ansprech"></label>
+      <label class="wide">Straße + Nr.<input id="k_strasse"></label>
+      <label>PLZ<input id="k_plz" inputmode="numeric"></label>
+      <label>Ort<input id="k_ort"></label>
+      <label>Telefon<input id="k_tel" type="tel"></label>
+      <label>Mobil<input id="k_mobil" type="tel"></label>
+      <label class="wide">E-Mail<input id="k_email" type="email"></label>
+      <label class="wide">Baustellen / Objekte<textarea id="k_baustellen" placeholder="Eine Baustelle pro Zeile, z. B. Neubau Gartenstraße 4"></textarea></label>
+      <label class="wide"><span class="row between">Maße / Aufmaß<button type="button" class="btn sm ai mic" data-for="k_aufmass" hidden>Einsprechen</button></span><textarea id="k_aufmass" placeholder="z. B. Tür Bad: 86 × 201 cm, DIN links, Wandstärke 12 cm"></textarea></label>
+      <label class="wide"><span class="row between">Notizen<button type="button" class="btn sm ai mic" data-for="k_notizen" hidden>Einsprechen</button></span><textarea id="k_notizen" placeholder="Wünsche, Zugang, Schlüssel, Absprachen …"></textarea></label>
+      <div class="row full">
+        <button class="btn pri" type="submit">Speichern</button>
+        <button class="btn" type="button" id="kClose">Schließen</button>
+        <button class="btn del" type="button" id="kDel" hidden>Löschen</button>
+      </div>
+    </form>
+    <div id="kExtra" hidden>
+      <div class="sub">
+        <h3>Termine</h3>
+        <ul class="mini" id="kTermine"></ul>
+        <form class="row" id="tForm" style="margin-top:10px;align-items:end">
+          <label style="flex:0 1 150px">Datum<input type="date" id="t_datum" required></label>
+          <label style="flex:0 1 110px">Uhrzeit<input type="time" id="t_zeit"></label>
+          <label style="flex:1 1 200px">Was<input id="t_text" placeholder="z. B. Aufmaß, Montage, Abnahme" required></label>
+          <button class="btn" type="submit">Termin hinzufügen</button>
+        </form>
+      </div>
+      <div class="sub">
+        <div class="row between"><h3 style="margin:0">Dokumente &amp; Fotos</h3>
+          <label class="btn sm" id="kUpLbl" style="text-transform:none;letter-spacing:0;color:var(--fg)" hidden>Datei hinzufügen<input type="file" id="kUp" multiple hidden></label></div>
+        <ul class="mini" id="kDocs" style="margin-top:8px"></ul>
+      </div>
+      <div class="sub" id="kTrips"></div>
+    </div>
+  </div>
+  <div class="clist" id="kList"></div>
+</section>
+
+<!-- DOKUMENTE -->
+<section class="sec" id="v-dokumente" hidden>
+  <div class="row between"><h2>Angebote, Rechnungen &amp; Dateien</h2></div>
+  <div class="drop" id="dDrop">
+    <p style="margin:0 0 10px"><b>Dateien hierher ziehen</b> oder auswählen. Jedes Format wird auf diesem Gerät gespeichert.</p>
+    <input type="file" id="dFile" multiple style="max-width:320px">
+    <div class="row" style="justify-content:center;margin-top:10px">
+      <label style="flex-direction:row;align-items:center;gap:6px;text-transform:none;letter-spacing:0;font-size:.9rem;color:var(--fg)" id="dAutoLbl" hidden><input type="checkbox" id="dAuto" checked style="width:auto">Automatisch auslesen (Art, Nummer, Datum, Betrag, Kunde)</label>
+    </div>
+  </div>
+  <div class="kpis" id="dKpis"></div>
+  <div class="panel" id="dEdit" hidden></div>
+  <div class="row" style="align-items:end">
+    <label style="flex:0 1 180px">Art<select id="dArt"><option value="">Alle</option></select></label>
+    <label style="flex:0 1 160px">Status<select id="dStat"><option value="">Alle</option></select></label>
+    <label style="flex:1 1 200px">Suche<input id="dSearch" placeholder="Nummer, Kunde, Titel …"></label>
+  </div>
+  <div class="tw"><table>
+    <thead><tr><th>Datum</th><th>Art</th><th>Nr.</th><th>Kunde / Lieferant</th><th>Titel</th><th class="n">Betrag</th><th>Status</th><th>Datei</th></tr></thead>
+    <tbody id="dBody"></tbody>
+  </table></div>
+</section>
+
+<!-- IMPORT -->
+<section class="sec" id="v-import" hidden>
+  <h2>Import</h2>
+  <div class="row">
+    <span class="muted" style="font-weight:600">Tabellen importieren als:</span>
+    <div class="seg" id="iTarget">
+      <button type="button" data-t="auto" aria-pressed="true">Automatisch</button>
+      <button type="button" data-t="fahrten" aria-pressed="false">Fahrten</button>
+      <button type="button" data-t="kunden" aria-pressed="false">Kunden</button>
+    </div>
+  </div>
+  <div class="drop" id="drop">
+    <p style="margin:0 0 10px"><b>Datei hierher ziehen</b> oder auswählen</p>
+    <input type="file" id="iFile" multiple style="max-width:320px">
+    <div class="fmt"><span>Excel .xlsx/.xls</span><span>.ods</span><span>CSV/TSV/TXT</span><span>Markdown</span><span>JSON</span><span>vCard .vcf</span><span>Backup</span></div>
+    <p class="note" style="margin:10px auto 0">Tabellen und Kontakte werden als Daten übernommen. Alle anderen Dateien (PDF, Word, Fotos, Angebote, Rechnungen …) werden unter „Dokumente“ gespeichert.</p>
+  </div>
+  <details class="panel">
+    <summary>Oder Text einfügen (z. B. Tabelle aus Chat, E-Mail oder Excel kopiert)</summary>
+    <textarea id="iPaste" style="margin-top:10px;min-height:140px" placeholder="| Datum | Start | Ziel | Anlass | Kilometer |"></textarea>
+    <button class="btn" id="iPasteBtn" style="margin-top:8px">Text auswerten</button>
+  </details>
+  <div id="iMap" class="panel" hidden></div>
+
+  <h2 style="margin-top:12px">Export &amp; Sicherung</h2>
+  <div class="panel row">
+    <button class="btn" data-ex="fahrten-csv">Fahrtenbuch als CSV</button>
+    <button class="btn" data-ex="fahrten-xlsx">Fahrtenbuch als Excel</button>
+    <button class="btn" data-ex="kunden-csv">Kunden als CSV</button>
+    <button class="btn" data-ex="kunden-xlsx">Kunden als Excel</button>
+    <button class="btn" data-ex="docs-xlsx">Dokumentenliste als Excel</button>
+    <button class="btn pri" data-ex="backup">Komplett-Sicherung (.json)</button>
+  </div>
+  <p class="note">Die Komplett-Sicherung enthält Kunden, Fahrten, Termine und die Dokumentenliste (ohne die Dateien selbst). Speichere sie in „Dateien“ → iCloud Drive. Über „Import“ spielst du sie wieder ein – auch auf einem neuen Gerät.</p>
+</section>
+
+<!-- EINSTELLUNGEN -->
+<section class="sec" id="v-settings" hidden>
+  <h2>Fahrzeug &amp; Grundeinstellungen</h2>
+  <form class="panel grid" id="sForm">
+    <label>Fahrzeug<input id="s_fz" placeholder="z. B. VW Caddy"></label>
+    <label>Kennzeichen<input id="s_kz" placeholder="z. B. M-AB 1234"></label>
+    <label>Anfangs-km-Stand<input id="s_km" inputmode="numeric" placeholder="z. B. 84250"></label>
+    <label>gilt ab Datum<input id="s_kmd" type="date"></label>
+    <label>Kilometerpauschale €/km<input id="s_ps" inputmode="decimal" placeholder="0,30"></label>
+    <label class="wide">Feste Orte (einer pro Zeile)<textarea id="s_orte" placeholder="Zuhause&#10;Hornbach&#10;Werkstatt"></textarea></label>
+    <div class="row wide" style="align-self:end"><button class="btn pri" type="submit">Speichern</button></div>
+  </form>
+  <div class="panel">
+    <h3>Anfangs-km-Stand nachträglich ermitteln</h3>
+    <p class="note">Du hast keinen Anfangs-km-Stand notiert? Lies den heutigen Tachostand ab. Ich rechne alle eingetragenen Fahrten zurück und schlage den Anfangs-km-Stand vor.</p>
+    <div class="row" style="margin-top:10px">
+      <label style="flex:0 1 200px">Tachostand heute<input id="s_now" inputmode="numeric"></label>
+      <button class="btn" id="sCalc" style="align-self:end">Zurückrechnen</button>
+    </div>
+    <p id="sCalcOut" class="note" style="margin-top:8px"></p>
+  </div>
+</section>
+
+</main>
+
+<datalist id="dlOrte"></datalist><datalist id="dlKunden"></datalist><datalist id="dlAnlass"></datalist>
+<div class="toast" id="toast" hidden></div>
+
+<script>
+(() => {
+const $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAll(s)];
+const S = { kunden: [], fahrten: [], dokumente: [], settings: { pauschale: 0.30, orte: ["Zuhause"] } };
+const CAP = { sample: null, images: null, dictation: null, assets: null, downloads: null };
+const SEED_FLAG = "seed-2026-11-22";
+const CDN = "https://cdnjs.cloudflare.com/ajax/libs/";
+
+/* ---------- Helfer ---------- */
+const esc = v => String(v ?? "").replace(/[&<>"]/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;" }[c]));
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+const num = v => { if (v == null || v === "") return null; if (typeof v === "number") return isFinite(v) ? v : null;
+  let s = String(v).replace(/[^\d,.\-]/g, ""); if (!s) return null;
+  if (s.includes(",") && s.includes(".")) s = s.lastIndexOf(",") > s.lastIndexOf(".") ? s.replace(/\./g, "").replace(",", ".") : s.replace(/,/g, "");
+  else if (s.includes(",")) s = s.replace(",", ".");
+  else if (/^\d{1,3}(\.\d{3})+$/.test(s)) s = s.replace(/\./g, "");
+  const n = parseFloat(s); return isNaN(n) ? null : n; };
+const fmtNum = (n, d = 0) => n == null ? "" : n.toLocaleString("de-DE", { minimumFractionDigits: d, maximumFractionDigits: d === 0 ? 1 : d });
+const eur = n => n == null ? "" : n.toLocaleString("de-DE", { style: "currency", currency: "EUR" });
+const fmtDate = iso => { if (!iso) return ""; const [y, m, d] = iso.split("-"); return `${d}.${m}.${y.slice(2)}`; };
+const today = () => { const d = new Date(); return new Date(d - d.getTimezoneOffset() * 6e4).toISOString().slice(0, 10); };
+const fmtSize = b => b > 1048576 ? fmtNum(b / 1048576, 1) + " MB" : fmtNum(Math.max(1, Math.round(b / 1024))) + " KB";
+const extOf = n => (String(n || "").toLowerCase().match(/\.([a-z0-9]+)$/) || [])[1] || "";
+function parseDate(v) {
+  if (v == null || v === "") return null;
+  if (typeof v === "number" && v > 20000 && v < 80000) { const d = new Date(Date.UTC(1899, 11, 30) + v * 864e5); return d.toISOString().slice(0, 10); }
+  if (v instanceof Date) return new Date(v - v.getTimezoneOffset() * 6e4).toISOString().slice(0, 10);
+  const s = String(v).trim(); let m;
+  if ((m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/))) return `${m[1]}-${m[2].padStart(2,"0")}-${m[3].padStart(2,"0")}`;
+  if ((m = s.match(/^(\d{1,2})[.\/-](\d{1,2})[.\/-](\d{2,4})/))) { let y = m[3]; if (y.length === 2) y = "20" + y; return `${y}-${m[2].padStart(2,"0")}-${m[1].padStart(2,"0")}`; }
+  if ((m = s.match(/^(\d{1,2})\.(\d{1,2})\.?$/))) return `${new Date().getFullYear()}-${m[2].padStart(2,"0")}-${m[1].padStart(2,"0")}`;
+  return null;
+}
+const ART = { g: ["Geschäftlich", "g"], a: ["Arbeitsweg", "a"], p: ["Privat", "p"] };
+function parseArt(v) { const s = String(v || "").toLowerCase(); if (s === "p" || s.startsWith("priv")) return "p"; if (s === "a" || s.includes("arbeitsweg")) return "a"; return "g"; }
+let toastT; function toast(msg, ms = 2800) { const t = $("#toast"); t.textContent = msg; t.hidden = false; clearTimeout(toastT); toastT = setTimeout(() => t.hidden = true, ms); }
+function armDelete(btn, fn) {
+  if (btn.classList.contains("arm")) { btn.classList.remove("arm"); btn.textContent = "Löschen"; fn(); return; }
+  btn.classList.add("arm"); btn.textContent = "Wirklich löschen?";
+  setTimeout(() => { btn.classList.remove("arm"); btn.textContent = "Löschen"; }, 3500);
+}
+const kName = k => !k ? "" : [k.firma, [k.vorname, k.name].filter(Boolean).join(" ")].filter(Boolean).join(" – ") || "(ohne Namen)";
+const kById = id => S.kunden.find(k => k.id === id);
+const loadScript = (src, glob) => window[glob] ? Promise.resolve(window[glob]) : new Promise((res, rej) => {
+  const s = document.createElement("script"); s.src = src; s.onload = () => res(window[glob]); s.onerror = () => rej(new Error("Programmteil konnte nicht geladen werden")); document.head.appendChild(s); });
+const use = n => { try { return Promise.resolve(window.claude?.use?.(n)).catch(() => null); } catch { return Promise.resolve(null); } };
+const aiErr = e => ({ not_granted: "Du hast Claude für diese App nicht erlaubt.", rate_limited: "Gerade zu viele Anfragen – bitte gleich nochmal.", invalid_json: "Antwort nicht lesbar – bitte nochmal versuchen.", images_unavailable: "Bilder können hier nicht gesendet werden." }[e?.code] || "Auslesen fehlgeschlagen: " + (e?.message || e?.code || e));
+
+/* ---------- Speicher (IndexedDB auf diesem Gerät) ---------- */
+const KINDS = ["kunden", "fahrten", "dokumente"];
+let DBP;
+function idb() { return DBP ||= new Promise((res, rej) => { const r = indexedDB.open("fahrtenbuch", 1);
+  r.onupgradeneeded = () => { const d = r.result; for (const n of [...KINDS, "files"]) d.createObjectStore(n, { keyPath: "id" }); d.createObjectStore("meta"); };
+  r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); }); }
+const reqP = r => new Promise((res, rej) => { r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); });
+const txDone = t => new Promise((res, rej) => { t.oncomplete = () => res(); t.onerror = () => rej(t.error); t.onabort = () => rej(t.error || new Error("Speichern abgebrochen")); });
+async function idbAll(n) { return reqP((await idb()).transaction(n).objectStore(n).getAll()); }
+async function idbGet(n, k) { return reqP((await idb()).transaction(n).objectStore(n).get(k)); }
+async function idbPutMany(n, items) { const t = (await idb()).transaction(n, "readwrite"); const os = t.objectStore(n); items.forEach(i => os.put(i)); return txDone(t); }
+async function idbDel(n, k) { const t = (await idb()).transaction(n, "readwrite"); t.objectStore(n).delete(k); return txDone(t); }
+async function metaGet(k) { return reqP((await idb()).transaction("meta").objectStore("meta").get(k)); }
+async function metaPut(k, v) { const t = (await idb()).transaction("meta", "readwrite"); t.objectStore("meta").put(v, k); return txDone(t); }
+const plain = o => JSON.parse(JSON.stringify(o));
+const Store = {
+  async init() {
+    try { for (const k of KINDS) S[k] = await idbAll(k); const st = await metaGet("settings"); if (st) S.settings = { ...S.settings, ...st }; }
+    catch (e) { setStatus("Speicher nicht verfügbar: " + (e?.message || e)); }
+    renderAll(); fillSettings();
+  },
+  merge(kind, list) { for (const o of list) { const i = S[kind].findIndex(x => x.id === o.id); if (i >= 0) S[kind][i] = o; else S[kind].push(o); } },
+  async put(kind, obj) { obj.id = obj.id || uid(); const c = plain(obj); await idbPutMany(kind, [c]); this.merge(kind, [c]); renderAll(); return obj; },
+  async putMany(kind, list, onProg) { list.forEach(o => o.id = o.id || uid()); const c = list.map(plain); await idbPutMany(kind, c); this.merge(kind, c); renderAll(); onProg?.(list.length); },
+  async del(kind, id) { await idbDel(kind, id); S[kind] = S[kind].filter(x => x.id !== id); renderAll(); },
+  async saveSettings() { await metaPut("settings", plain(S.settings)); renderAll(); }
+};
+function setStatus(t) { $("#status").textContent = t; }
+async function safe(p, ok) { try { const r = await p; if (ok) toast(ok); return r; } catch (e) { toast(e?.code === "quota_exceeded" ? "Speicher voll – bitte alte Einträge löschen." : "Fehler: " + (e?.message || e)); return null; } }
+
+/* ---------- Navigation ---------- */
+const VIEWS = ["fahrten", "kunden", "dokumente", "import", "settings"];
+function show(v) { if (!VIEWS.includes(v)) v = "fahrten"; VIEWS.forEach(x => $("#v-" + x).hidden = x !== v);
+  $$("#nav button").forEach(b => b.dataset.v === v ? b.setAttribute("aria-current", "page") : b.removeAttribute("aria-current")); }
+function go(v) { location.hash = v; show(v); window.scrollTo(0, 0); }
+$("#nav").addEventListener("click", e => { const b = e.target.closest("button"); if (b) go(b.dataset.v); });
+window.addEventListener("hashchange", () => show(location.hash.slice(1)));
+
+/* ---------- Kilometerstände ---------- */
+function sortedTrips() { return [...S.fahrten].sort((a, b) => (a.datum || "").localeCompare(b.datum || "") || (a.createdAt || 0) - (b.createdAt || 0)); }
+function withOdo() {
+  const st = S.settings; let run = num(st.startKm); const from = st.startKmDatum || "";
+  return sortedTrips().map(t => {
+    let s = num(t.kmStart), e = num(t.kmEnde), calc = false, km = num(t.km);
+    if (km == null && s != null && e != null) km = e - s;
+    if (s == null && run != null && (!from || (t.datum || "") >= from)) { s = run; calc = true; }
+    if (e == null && s != null && km != null) e = s + km;
+    if (e != null) run = e; else if (run != null && km != null) run += km;
+    return { ...t, _km: km ?? 0, _s: s, _e: e, _calc: calc };
+  });
+}
+
+/* ---------- Fahrtenbuch ---------- */
+let editTrip = null;
+function kundeLabel(t) { const k = kById(t.kundeId); return k ? kName(k) + (t.kunde && t.kunde !== kName(k) ? " · " + t.kunde : "") : (t.kunde || ""); }
+function filteredTrips() {
+  const sel = $("#fMonth").value, q = $("#fSearch").value.trim().toLowerCase();
+  return withOdo().filter(t => (!sel || (t.datum || "").startsWith(sel)) &&
+    (!q || [t.start, t.ziel, kundeLabel(t), t.anlass, fmtDate(t.datum)].join(" ").toLowerCase().includes(q)));
+}
+function renderFahrten() {
+  const all = S.fahrten;
+  const months = [...new Set(all.map(t => (t.datum || "").slice(0, 7)).filter(Boolean))].sort().reverse();
+  const years = [...new Set(months.map(m => m.slice(0, 4)))];
+  const sel = $("#fMonth"), cur = sel.value;
+  sel.innerHTML = `<option value="">Alle Fahrten</option>` + years.map(y => `<option value="${y}">Jahr ${y}</option>`).join("") +
+    months.map(m => `<option value="${m}">${new Date(m + "-01T12:00").toLocaleDateString("de-DE", { month: "long", year: "numeric" })}</option>`).join("");
+  sel.value = [...sel.options].some(o => o.value === cur) ? cur : "";
+  const list = filteredTrips().reverse();
+  const sum = a => list.filter(t => (t.art || "g") === a).reduce((s, t) => s + t._km, 0);
+  const g = sum("g"), ar = sum("a"), p = sum("p"), ps = num(S.settings.pauschale) ?? 0.30, pr = S.fahrten.filter(t => t.pruefen).length;
+  $("#kpis").innerHTML = (pr ? `<div class="kpi" style="border-color:var(--mark)"><span>Zu prüfen</span><b>${pr}</b></div>` : "") + [["Fahrten", fmtNum(list.length)], ["km gesamt", fmtNum(g + ar + p)], ["davon geschäftlich", fmtNum(g) + " km"],
+    ["Pauschale geschäftl.", eur(g * ps)]].map(([l, v]) => `<div class="kpi"><span>${l}</span><b>${v}</b></div>`).join("");
+  if (!list.length) { $("#fBody").innerHTML = `<tr><td colspan="8" class="empty">${all.length ? "Keine Fahrten für diese Auswahl." : "Noch keine Fahrten. Trag oben deine erste Fahrt ein oder spiel unter „Import / Export“ deine Sicherung ein."}</td></tr>`; return; }
+  let html = "", lastDay = null;
+  for (const t of list) {
+    if (t.datum !== lastDay) {
+      const dayKm = list.filter(x => x.datum === t.datum).reduce((s, x) => s + x._km, 0);
+      html += `<tr class="mrow"><td colspan="6">${t.datum ? new Date(t.datum + "T12:00").toLocaleDateString("de-DE", { weekday: "long", day: "2-digit", month: "2-digit", year: "2-digit" }) : "ohne Datum"}</td><td class="n">${fmtNum(dayKm)}</td><td></td></tr>`;
+      lastDay = t.datum;
+    }
+    const a = ART[t.art || "g"];
+    html += `<tr class="click" data-id="${t.id}"><td class="d">${fmtDate(t.datum)}</td><td>${esc(t.start)}</td><td>${esc(t.ziel)}</td><td>${esc(kundeLabel(t))}</td><td>${esc(t.anlass)}${t.pruefen ? ` <span class="pill a" title="${esc(t.pruefen)}">prüfen</span><br><small class="muted">${esc(t.pruefen)}</small>` : ""}</td>
+      <td><span class="pill ${a[1]}">${a[0]}</span></td><td class="n">${fmtNum(t._km)}</td>
+      <td class="n ${t._calc ? "calc" : ""}">${t._s != null ? fmtNum(t._s) + " → " + fmtNum(t._e) : "–"}</td></tr>`;
+  }
+  $("#fBody").innerHTML = html;
+}
+$("#fBody").addEventListener("click", e => { const tr = e.target.closest("tr[data-id]"); if (tr) loadTrip(S.fahrten.find(t => t.id === tr.dataset.id)); });
+$("#fMonth").addEventListener("change", renderFahrten); $("#fSearch").addEventListener("input", renderFahrten);
+
+function resetTripForm(prefill) {
+  editTrip = null; $("#fForm").reset(); $("#f_datum").value = prefill?.datum || today();
+  if (prefill) for (const k of ["start", "ziel", "kunde", "anlass"]) $("#f_" + k).value = prefill[k] || "";
+  if (prefill?.art) $("#f_art").value = prefill.art;
+  $("#fTitle").textContent = prefill ? "Rückfahrt" : "Neue Fahrt"; $("#fCancel").hidden = true; $("#fDel").hidden = true; $("#fSave").textContent = "Speichern";
+}
+function loadTrip(t) {
+  if (!t) return; editTrip = t;
+  $("#f_datum").value = t.datum || ""; $("#f_start").value = t.start || ""; $("#f_ziel").value = t.ziel || "";
+  const k = kById(t.kundeId); $("#f_kunde").value = k ? kName(k) : (t.kunde || "");
+  $("#f_anlass").value = t.anlass || ""; $("#f_km").value = t.km != null ? fmtNum(num(t.km)) : ""; $("#f_art").value = t.art || "g";
+  $("#f_kmS").value = t.kmStart ?? ""; $("#f_kmE").value = t.kmEnde ?? "";
+  $("#fTitle").textContent = "Fahrt bearbeiten"; $("#fCancel").hidden = false; $("#fDel").hidden = false; $("#fSave").textContent = "Änderung speichern";
+  $("#fForm").scrollIntoView({ behavior: "smooth", block: "center" });
+}
+function matchKunde(text) { const s = (text || "").trim().toLowerCase(); if (!s) return null;
+  return S.kunden.find(k => [kName(k), k.name, k.firma, [k.vorname, k.name].filter(Boolean).join(" "), [k.name, k.vorname].filter(Boolean).join(" ")].some(x => (x || "").toLowerCase() === s) ||
+    (k.baustellen || "").toLowerCase().split("\n").map(x => x.trim()).includes(s)) || null; }
+function readTripForm() {
+  const kmS = num($("#f_kmS").value), kmE = num($("#f_kmE").value); let km = num($("#f_km").value);
+  if (km == null && kmS != null && kmE != null) km = kmE - kmS;
+  const ktext = $("#f_kunde").value.trim(), k = matchKunde(ktext);
+  return { ...(editTrip || { createdAt: Date.now() }), datum: $("#f_datum").value, start: $("#f_start").value.trim(), ziel: $("#f_ziel").value.trim(),
+    kundeId: k?.id || null, kunde: k ? (kName(k).toLowerCase() === ktext.toLowerCase() ? "" : ktext) : ktext, anlass: $("#f_anlass").value.trim(),
+    km, kmStart: kmS, kmEnde: kmE, art: $("#f_art").value, pruefen: "" };
+}
+async function saveTrip(back) {
+  if (!$("#fForm").reportValidity()) return;
+  const t = readTripForm(); if (t.km == null) { toast("Bitte Kilometer oder beide km-Stände eintragen."); return; }
+  const wasEdit = !!editTrip; await safe(Store.put("fahrten", t), wasEdit ? "Fahrt geändert" : "Fahrt gespeichert");
+  if (back) { resetTripForm({ datum: t.datum, start: t.ziel, ziel: t.start, kunde: $("#f_kunde").value, anlass: "Rückfahrt", art: t.art }); $("#f_km").value = fmtNum(t.km); $("#f_km").focus(); }
+  else resetTripForm();
+}
+$("#fForm").addEventListener("submit", e => { e.preventDefault(); saveTrip(false); });
+$("#fBack").addEventListener("click", () => saveTrip(true));
+$("#fCancel").addEventListener("click", () => resetTripForm());
+$("#fDel").addEventListener("click", e => armDelete(e.currentTarget, async () => { await safe(Store.del("fahrten", editTrip.id), "Fahrt gelöscht"); resetTripForm(); }));
+
+/* ---------- Diktieren ---------- */
+let dictTarget = null, dictBuf = "";
+function knownCtx() {
+  const orte = [...new Set([...(S.settings.orte || []), ...S.fahrten.flatMap(t => [t.start, t.ziel])].filter(Boolean))].slice(0, 60);
+  const kunden = S.kunden.map(kName).slice(0, 150);
+  return `Bekannte Orte: ${orte.join("; ") || "–"}\nBekannte Kunden: ${kunden.join("; ") || "–"}`;
+}
+function setupDictation(d) {
+  CAP.dictation = d; $("#micTrip").hidden = false; $$(".mic").forEach(b => b.hidden = false);
+  d.onPartial(({ text }) => { if (dictTarget === "trip") { $("#micLive").hidden = false; $("#micLive").textContent = (dictBuf + " " + text).trim() || "Ich höre zu …"; } });
+  d.onFinal(({ text }) => {
+    if (dictTarget === "trip") { dictBuf = (dictBuf + " " + text).trim(); $("#micLive").textContent = dictBuf; }
+    else if (dictTarget) { const ta = $("#" + dictTarget); ta.value = (ta.value ? ta.value.replace(/\s*$/, " ") : "") + text.trim(); }
+  });
+  d.onState(({ state, reason }) => {
+    const busy = state !== "idle";
+    const btn = dictTarget === "trip" ? $("#micTrip") : $(`.mic[data-for="${dictTarget}"]`);
+    if (btn) { btn.classList.toggle("rec", busy); btn.textContent = busy ? "Fertig" : (dictTarget === "trip" ? "Fahrt einsprechen" : "Einsprechen"); }
+    if (!busy) {
+      if (reason === "unavailable") { $("#micTrip").hidden = true; $$(".mic").forEach(b => b.hidden = true); }
+      else if (reason === "not_granted") toast("Mikrofon ist für diese App nicht erlaubt.");
+      else if (reason === "rate_limited" || reason === "upstream_error") toast("Spracheingabe gerade nicht möglich – bitte nochmal.");
+      if (dictTarget === "trip" && dictBuf) parseSpokenTrip(dictBuf);
+      else if (dictTarget === "trip") $("#micLive").hidden = true;
+      dictTarget = null;
+    }
+  });
+}
+function micClick(target) {
+  const d = CAP.dictation; if (!d) return;
+  if (d.active()) { d.stop(); return; }
+  dictTarget = target; if (target === "trip") { dictBuf = ""; $("#micLive").hidden = false; $("#micLive").textContent = "Ich höre zu … z. B. „Heute von Zuhause zur Baustelle Müller, Türmontage, 32 Kilometer“"; }
+  d.start({ language: "de" }).catch(e => { if (!["stopped", "dismissed"].includes(e.code)) toast(e.code === "not_granted" ? "Mikrofon nicht erlaubt." : "Spracheingabe nicht möglich."); });
+}
+$("#micTrip").addEventListener("click", () => micClick("trip"));
+$$(".mic").forEach(b => b.addEventListener("click", () => micClick(b.dataset.for)));
+async function parseSpokenTrip(text) {
+  $("#micLive").textContent = "„" + text + "“ – wird ausgewertet …";
+  if (!CAP.sample) { $("#f_anlass").value = text; $("#micLive").textContent = "Text in „Anlass“ eingetragen – bitte Felder ergänzen."; return; }
+  try {
+    const r = await CAP.sample.json(`Wandle diese gesprochene Fahrtbeschreibung eines Handwerkers in ein Fahrtenbuch-Feld-Objekt um.
+Antworte nur mit JSON: {"datum":"YYYY-MM-DD","start":"","ziel":"","kunde":"","anlass":"","km":null,"kmStart":null,"kmEnde":null,"art":"g"}
+Regeln: Heute ist ${today()} (${new Date().toLocaleDateString("de-DE", { weekday: "long" })}). "gestern", "Montag" usw. relativ dazu; ohne Datum = heute. art: g=geschäftlich, a=Arbeitsweg, p=privat (Standard g). Wenn ein bekannter Ort oder Kunde gemeint ist, exakt dessen Schreibweise verwenden. Unbekanntes leer lassen bzw. null.
+${knownCtx()}
+Gesprochener Text: "${text}"`, { modelTier: "quick" });
+    if (r.datum) $("#f_datum").value = parseDate(r.datum) || $("#f_datum").value;
+    for (const k of ["start", "ziel", "kunde", "anlass"]) if (r[k]) $("#f_" + k).value = r[k];
+    if (num(r.km) != null) $("#f_km").value = fmtNum(num(r.km));
+    if (num(r.kmStart) != null) $("#f_kmS").value = num(r.kmStart);
+    if (num(r.kmEnde) != null) $("#f_kmE").value = num(r.kmEnde);
+    if (r.art) $("#f_art").value = parseArt(r.art);
+    $("#micLive").textContent = "„" + text + "“ – eingetragen. Bitte prüfen und speichern.";
+  } catch (e) { $("#f_anlass").value ||= text; $("#micLive").textContent = aiErr(e); }
+}
+
+/* ---------- Fotos vom Fahrtenbuch ---------- */
+async function shrink(file, max = 2000) {
+  try {
+    const bmp = await createImageBitmap(file); const sc = Math.min(1, max / Math.max(bmp.width, bmp.height));
+    const c = document.createElement("canvas"); c.width = Math.round(bmp.width * sc); c.height = Math.round(bmp.height * sc);
+    c.getContext("2d").drawImage(bmp, 0, 0, c.width, c.height);
+    return await new Promise(r => c.toBlob(b => r(b || file), "image/jpeg", 0.88));
+  } catch { return file; }
+}
+$("#photoIn").addEventListener("change", async e => {
+  const files = [...e.target.files]; e.target.value = ""; if (!files.length) return;
+  const max = CAP.images?.maxCount || 5; const lbl = $("#photoPanel .note");
+  const old = lbl.innerHTML; const rows = [["Datum", "Start", "Ziel", "Kunde", "Anlass", "Kilometer", "km-Stand Start", "km-Stand Ende", "Art"]]; const hints = [];
+  try {
+    for (let i = 0; i < files.length; i += max) {
+      lbl.innerHTML = `<b>Lese Seite ${i + 1}${files.length > 1 ? " von " + files.length : ""} …</b> Das dauert etwa eine halbe Minute.`;
+      const imgs = await Promise.all(files.slice(i, i + max).map(f => shrink(f)));
+      const r = await CAP.sample.json(`Die Bilder zeigen handschriftliche Seiten eines Fahrtenbuchs eines Handwerkers (Spalten etwa: Datum, Start, Ziel, Kunde/Baustelle, Anlass, Kilometer, evtl. km-Stand).
+Lies JEDE Fahrt-Zeile in Reihenfolge aus. Antworte nur mit JSON:
+{"fahrten":[{"datum":"YYYY-MM-DD","start":"","ziel":"","kunde":"","anlass":"","km":0,"kmStart":null,"kmEnde":null,"art":"g"}],"hinweise":"unsichere Stellen kurz, sonst leer"}
+Regeln: Zweistellige Jahre wie 26 = 2026; ohne Jahr ${new Date().getFullYear()}. Fehlt ein Datum, gilt das der Zeile darüber ("dito", Striche, Anführungszeichen ebenso). art: g=geschäftlich, a=Arbeitsweg, p=privat (Standard g). Wenn ein bekannter Ort oder Kunde gemeint ist, dessen Schreibweise verwenden. Nichts erfinden: unleserliche Felder leer lassen.
+${knownCtx()}`, { images: imgs, modelTier: "complex" });
+      for (const t of r?.fahrten || []) rows.push([t.datum || "", t.start || "", t.ziel || "", t.kunde || "", t.anlass || "", t.km ?? "", t.kmStart ?? "", t.kmEnde ?? "", t.art || "g"]);
+      if (r?.hinweise) hints.push(r.hinweise);
+    }
+    lbl.innerHTML = old;
+    if (rows.length < 2) { toast("Auf den Fotos wurden keine Fahrten erkannt."); return; }
+    setParsed([{ n: "Fotos", rows }], files.length + " Foto(s) vom Fahrtenbuch", "fahrten", hints.join(" "));
+    go("import");
+  } catch (err) { lbl.innerHTML = old; toast(aiErr(err), 4000); }
+});
+
+/* ---------- Monatsbericht ---------- */
+$("#report").addEventListener("click", () => {
+  if (!window.XLSX) { toast("Excel-Modul nicht geladen."); return; }
+  const list = filteredTrips(), ps = num(S.settings.pauschale) ?? 0.30, st = S.settings;
+  if (!list.length) { toast("Keine Fahrten im gewählten Zeitraum."); return; }
+  const zeitraum = $("#fMonth").selectedOptions[0]?.textContent || "Alle Fahrten";
+  const byM = {}; for (const t of list) { const m = (t.datum || "ohne").slice(0, 7); (byM[m] ||= { n: 0, g: 0, a: 0, p: 0 }); byM[m].n++; byM[m][t.art || "g"] += t._km; }
+  const ov = [["Fahrtenbuch – Bericht"], ["Zeitraum", zeitraum], ["Fahrzeug", st.fahrzeug || ""], ["Kennzeichen", st.kennzeichen || ""], ["Kilometerpauschale €/km", ps], ["Erstellt am", fmtDate(today())], [],
+    ["Monat", "Fahrten", "km geschäftlich", "km Arbeitsweg", "km privat", "km gesamt", "Pauschale geschäftlich €"]];
+  const tot = { n: 0, g: 0, a: 0, p: 0 };
+  for (const m of Object.keys(byM).sort()) { const x = byM[m]; Object.keys(tot).forEach(k => tot[k] += x[k]);
+    ov.push([m === "ohne" ? "ohne Datum" : new Date(m + "-01T12:00").toLocaleDateString("de-DE", { month: "long", year: "numeric" }), x.n, x.g, x.a, x.p, x.g + x.a + x.p, +(x.g * ps).toFixed(2)]); }
+  ov.push(["Summe", tot.n, tot.g, tot.a, tot.p, tot.g + tot.a + tot.p, +(tot.g * ps).toFixed(2)]);
+  ov.push([], ["Hinweis: Fahrten Wohnung–Arbeitsstätte (Arbeitsweg) werden steuerlich über die Entfernungspauschale abgerechnet, nicht über die Kilometerpauschale."]);
+  const det = [["Datum", "Start", "Ziel", "Kunde / Baustelle", "Anlass", "Art", "Kilometer", "km-Stand Start", "km-Stand Ende", "Erstattung €"],
+    ...list.map(t => [fmtDate(t.datum), t.start, t.ziel, kundeLabel(t), t.anlass, ART[t.art || "g"][0], t._km, t._s ?? "", t._e ?? "", (t.art || "g") === "g" ? +(t._km * ps).toFixed(2) : ""])];
+  const byK = {}; for (const t of list.filter(t => (t.art || "g") === "g")) { const k = kundeLabel(t) || "(ohne Kunde)"; (byK[k] ||= [0, 0]); byK[k][0]++; byK[k][1] += t._km; }
+  const kk = [["Kunde / Baustelle", "Fahrten", "km", "Pauschale €"], ...Object.entries(byK).sort((a, b) => b[1][1] - a[1][1]).map(([k, [n, km]]) => [k, n, km, +(km * ps).toFixed(2)])];
+  const wb = XLSX.utils.book_new();
+  [[ov, "Übersicht", [26, 10, 16, 15, 12, 12, 24]], [det, "Fahrten", [11, 22, 22, 26, 24, 13, 10, 14, 14, 12]], [kk, "Nach Kunde", [34, 10, 10, 14]]].forEach(([rows, name, w]) => {
+    const ws = XLSX.utils.aoa_to_sheet(rows); ws["!cols"] = w.map(wch => ({ wch })); XLSX.utils.book_append_sheet(wb, ws, name); });
+  save(`Fahrtenbuch_Bericht_${($("#fMonth").value || "gesamt")}.xlsx`, new Blob([XLSX.write(wb, { type: "array", bookType: "xlsx" })]));
+});
+
+/* ---------- Kunden ---------- */
+let editK = null;
+function nextNr() { return Math.max(1000, ...S.kunden.map(k => parseInt(k.nr) || 0)) + 1; }
+function renderKunden() {
+  const q = $("#kSearch").value.trim().toLowerCase();
+  const kmBy = {}; for (const t of S.fahrten) if (t.kundeId) kmBy[t.kundeId] = (kmBy[t.kundeId] || 0) + (num(t.km) || 0);
+  const list = [...S.kunden].filter(k => !q || JSON.stringify(k).toLowerCase().includes(q)).sort((a, b) => kName(a).localeCompare(kName(b), "de"));
+  $("#kList").innerHTML = list.length ? list.map(k => `<button class="ccard" data-id="${k.id}"><span class="nr">Nr. ${esc(k.nr)}</span><b>${esc(kName(k))}</b>
+    <small>${esc([k.strasse, [k.plz, k.ort].filter(Boolean).join(" ")].filter(Boolean).join(", ") || "keine Adresse")}</small>
+    <small>${esc(k.mobil || k.telefon || k.email || "")}</small>${kmBy[k.id] ? `<small>${fmtNum(kmBy[k.id])} km gefahren</small>` : ""}</button>`).join("")
+    : `<div class="empty panel">${S.kunden.length ? "Kein Kunde passt zur Suche." : "Noch keine Kunden. Lege deinen ersten Kunden an oder importiere Kontakte (Excel, CSV, vCard)."}</div>`;
+  $("#dlKunden").innerHTML = S.kunden.map(k => `<option value="${esc(kName(k))}">`).join("") +
+    S.kunden.flatMap(k => (k.baustellen || "").split("\n").map(x => x.trim()).filter(Boolean).map(b => `<option value="${esc(b)}">${esc(kName(k))}</option>`)).join("");
+  const orte = new Set([...(S.settings.orte || []), ...S.fahrten.flatMap(t => [t.start, t.ziel])].filter(Boolean));
+  $("#dlOrte").innerHTML = [...orte].map(o => `<option value="${esc(o)}">`).join("");
+  $("#dlAnlass").innerHTML = [...new Set(S.fahrten.map(t => t.anlass).filter(Boolean))].map(o => `<option value="${esc(o)}">`).join("");
+  // nächste Termine
+  const now = today(), up = S.kunden.flatMap(k => (k.termine || []).filter(t => t.datum >= now).map(t => ({ ...t, k }))).sort((a, b) => (a.datum + (a.zeit || "")).localeCompare(b.datum + (b.zeit || ""))).slice(0, 8);
+  $("#upcoming").hidden = !up.length;
+  $("#upcoming").innerHTML = `<h3>Nächste Termine</h3><ul class="mini">${up.map(t => `<li><span class="d">${new Date(t.datum + "T12:00").toLocaleDateString("de-DE", { weekday: "short", day: "2-digit", month: "2-digit" })}${t.zeit ? " · " + t.zeit : ""}</span><span class="grow">${esc(t.text)}</span><button class="btn sm" data-open="${t.k.id}">${esc(kName(t.k))}</button></li>`).join("")}</ul>`;
+}
+$("#upcoming").addEventListener("click", e => { const b = e.target.closest("[data-open]"); if (b) openKunde(kById(b.dataset.open)); });
+$("#kSearch").addEventListener("input", renderKunden);
+$("#kList").addEventListener("click", e => { const c = e.target.closest(".ccard"); if (c) openKunde(kById(c.dataset.id)); });
+$("#kNew").addEventListener("click", () => openKunde(null));
+$("#kClose").addEventListener("click", () => { $("#kEdit").hidden = true; editK = null; });
+const KF = ["name", "vorname", "firma", "ansprech", "strasse", "plz", "ort", "tel", "mobil", "email", "baustellen", "aufmass", "notizen"];
+const KMAP = { ansprech: "ansprechpartner", tel: "telefon" };
+function openKunde(k) {
+  if (location.hash !== "#kunden") go("kunden");
+  editK = k; $("#kEdit").hidden = false; $("#kForm").reset();
+  for (const f of KF) $("#k_" + f).value = k?.[KMAP[f] || f] || "";
+  $("#kTitle").textContent = k ? kName(k) : "Neuer Kunde"; $("#kNr").textContent = "Nr. " + (k?.nr || nextNr()); $("#kDel").hidden = !k;
+  $("#t_datum").value = today(); renderKExtra(); $("#kEdit").scrollIntoView({ behavior: "smooth", block: "start" }); if (!k) $("#k_name").focus();
+}
+function renderKExtra() {
+  $("#kExtra").hidden = !editK; if (!editK) return;
+  editK = kById(editK.id) || editK;
+  const ts = [...(editK.termine || [])].sort((a, b) => (a.datum + (a.zeit || "")).localeCompare(b.datum + (b.zeit || "")));
+  $("#kTermine").innerHTML = ts.length ? ts.map(t => `<li${t.datum < today() ? ' class="muted"' : ""}><span class="d">${fmtDate(t.datum)}${t.zeit ? " · " + t.zeit : ""}</span><span class="grow">${esc(t.text)}</span><button class="btn sm del" data-tdel="${t.id}">Entfernen</button></li>`).join("") : `<li class="muted">Keine Termine.</li>`;
+  const docs = S.dokumente.filter(d => d.kundeId === editK.id).sort((a, b) => (b.datum || "").localeCompare(a.datum || ""));
+  $("#kDocs").innerHTML = docs.length ? docs.map(docLi).join("") : `<li class="muted">Noch keine Dokumente oder Fotos.</li>`;
+  const tr = sortedTrips().filter(t => t.kundeId === editK.id).reverse();
+  $("#kTrips").innerHTML = tr.length ? `<h3>Fahrten zu diesem Kunden · ${fmtNum(tr.reduce((s, t) => s + (num(t.km) || 0), 0))} km</h3><div class="tw"><table><thead><tr><th>Datum</th><th>Start</th><th>Ziel</th><th>Anlass</th><th class="n">km</th></tr></thead><tbody>` +
+    tr.map(t => `<tr><td class="d">${fmtDate(t.datum)}</td><td>${esc(t.start)}</td><td>${esc(t.ziel)}</td><td>${esc(t.anlass)}</td><td class="n">${fmtNum(num(t.km))}</td></tr>`).join("") + `</tbody></table></div>`
+    : `<h3>Fahrten</h3><p class="note">Noch keine Fahrten mit diesem Kunden verknüpft.</p>`;
+}
+function docLi(d) { return `<li><span class="d">${fmtDate(d.datum)}</span><span class="pill">${esc(d.art || "Datei")}</span><span class="grow">${esc(d.titel || d.filename)}${d.nummer ? ` <span class="nr">Nr. ${esc(d.nummer)}</span>` : ""}</span>${d.betrag != null ? `<span class="nr">${eur(num(d.betrag))}</span>` : ""}<button class="btn sm" data-doc="${d.id}">Öffnen</button></li>`; }
+$("#kDocs").addEventListener("click", e => { const b = e.target.closest("[data-doc]"); if (b) openDoc(b.dataset.doc); });
+$("#kTermine").addEventListener("click", async e => { const b = e.target.closest("[data-tdel]"); if (!b) return;
+  const k = { ...editK, termine: (editK.termine || []).filter(t => t.id !== b.dataset.tdel) }; await safe(Store.put("kunden", k), "Termin entfernt"); editK = k; renderKExtra(); });
+$("#tForm").addEventListener("submit", async e => { e.preventDefault(); if (!editK) return;
+  const k = { ...editK, termine: [...(editK.termine || []), { id: uid(), datum: $("#t_datum").value, zeit: $("#t_zeit").value, text: $("#t_text").value.trim() }] };
+  await safe(Store.put("kunden", k), "Termin gespeichert"); editK = k; $("#t_text").value = ""; $("#t_zeit").value = ""; renderKExtra(); });
+$("#kForm").addEventListener("submit", async e => {
+  e.preventDefault(); const k = { ...(editK || { createdAt: Date.now(), nr: String(nextNr()) }) };
+  for (const f of KF) k[KMAP[f] || f] = $("#k_" + f).value.trim();
+  if (!k.name && !k.firma) { toast("Bitte Name oder Firma eintragen."); return; }
+  await safe(Store.put("kunden", k), editK ? "Kunde gespeichert" : "Kunde angelegt"); editK = k; $("#kTitle").textContent = kName(k); $("#kDel").hidden = false; renderKExtra();
+});
+$("#kDel").addEventListener("click", e => armDelete(e.currentTarget, async () => { await safe(Store.del("kunden", editK.id), "Kunde gelöscht"); $("#kEdit").hidden = true; editK = null; }));
+$("#kUp").addEventListener("change", e => { const f = [...e.target.files]; e.target.value = ""; if (editK) uploadDocs(f, editK.id); });
+
+/* ---------- Dokumente ---------- */
+const DART = ["Angebot", "Auftrag", "Rechnung", "Eingangsrechnung", "Lieferschein", "Foto", "Plan / Zeichnung", "Vertrag", "Sonstiges"];
+const DSTAT = ["offen", "angenommen", "abgelehnt", "bezahlt", "erledigt"];
+$("#dArt").innerHTML += DART.map(a => `<option>${a}</option>`).join(""); $("#dStat").innerHTML += DSTAT.map(a => `<option>${a}</option>`).join("");
+const DIRECT = { png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif", webp: "image/webp", pdf: "application/pdf", mp4: "video/mp4", webm: "video/webm", mov: "video/quicktime", csv: "text/csv", txt: "text/plain", md: "text/markdown", json: "application/json" };
+const DL_OK = "gif png jpg jpeg webp mp4 webm mov txt json md docx pptx epub csv ttf html svg pdf xlsx zip fig".split(" ");
+const isImg = d => /^image\//.test(d.mime || "") || ["png", "jpg", "jpeg", "gif", "webp"].includes(extOf(d.filename));
+function fileToB64(file) { return new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(String(r.result).split(",")[1] || ""); r.onerror = rej; r.readAsDataURL(file); }); }
+async function uploadFile(file) {
+  const id = uid(); await idbPutMany("files", [{ id, blob: file, name: file.name }]); return { assetId: id, wrapped: false };
+}
+async function uploadFileOld(file) {
+  const a = CAP.assets;
+  const type = DIRECT[extOf(file.name)];
+  if (type) { try { const r = await a.upload(file, { type }); return { assetId: r.id, wrapped: false }; } catch (e) { if (e?.code !== "unsupported_type" && e?.code !== "invalid_request") throw e; } }
+  if (file.size > 15 * 1048576) throw new Error(file.name + " ist größer als 15 MB");
+  const r = await a.upload(new Blob([await fileToB64(file)], { type: "text/plain" }), { type: "text/plain" }); // Formate ohne direkte Ablage: verpackt speichern
+  return { assetId: r.id, wrapped: true };
+}
+async function uploadDocs(files, kundeId) {
+  if (!files.length) return;
+  if (!CAP.assets) { toast("Dateien ablegen kann nur der Besitzer dieser App."); return; }
+  const auto = !$("#dAutoLbl").hidden && $("#dAuto").checked;
+  let n = 0;
+  for (const f of files) {
+    toast(`Lade ${f.name} hoch … (${++n}/${files.length})`, 60000);
+    try {
+      const up = await uploadFile(f);
+      const d = { createdAt: Date.now(), filename: f.name, mime: f.type || "", size: f.size, ...up, kundeId: kundeId || null, kunde: "",
+        datum: today(), art: isImg({ filename: f.name, mime: f.type }) ? "Foto" : "Sonstiges", status: "offen", titel: f.name.replace(/\.[^.]+$/, "") };
+      await Store.put("dokumente", d);
+      if (auto && CAP.sample) { toast(`Lese ${f.name} aus …`, 90000); await readDoc(d, f, !!kundeId).catch(e => toast(aiErr(e), 4000)); }
+    } catch (e) { toast("Fehler bei " + f.name + ": " + (e?.message || e?.code), 5000); }
+  }
+  toast(files.length === 1 ? "Datei gespeichert" : files.length + " Dateien gespeichert");
+  renderAll();
+}
+async function getDocBlob(d) {
+  const r = await idbGet("files", d.assetId);
+  if (!r?.blob) throw new Error("Die Datei ist auf diesem Gerät nicht vorhanden (nur die Angaben wurden übernommen)");
+  return r.blob;
+}
+async function downloadDoc(d) {
+  try { await save(d.filename, await getDocBlob(d)); } catch (e) { toast(e?.message || String(e), 4500); }
+}
+async function extractText(file) {
+  const ext = extOf(file.name);
+  if (ext === "pdf") {
+    const lib = await loadScript(CDN + "pdf.js/3.11.174/pdf.min.js", "pdfjsLib");
+    await loadScript(CDN + "pdf.js/3.11.174/pdf.worker.min.js", "pdfjsWorker");
+    lib.GlobalWorkerOptions.workerSrc = CDN + "pdf.js/3.11.174/pdf.worker.min.js";
+    const pdf = await lib.getDocument({ data: new Uint8Array(await file.arrayBuffer()) }).promise; let text = "";
+    for (let i = 1; i <= Math.min(pdf.numPages, 6); i++) { const tc = await (await pdf.getPage(i)).getTextContent(); text += tc.items.map(x => x.str + (x.hasEOL ? "\n" : " ")).join("") + "\n"; }
+    if (text.replace(/\s/g, "").length > 60) return { text };
+    const imgs = []; // eingescannte PDF: Seiten als Bild
+    for (let i = 1; i <= Math.min(pdf.numPages, CAP.images?.maxCount || 2, 3); i++) {
+      const pg = await pdf.getPage(i), vp = pg.getViewport({ scale: 1.8 }), c = document.createElement("canvas"); c.width = vp.width; c.height = vp.height;
+      await pg.render({ canvasContext: c.getContext("2d"), viewport: vp }).promise; imgs.push(await new Promise(r => c.toBlob(r, "image/jpeg", 0.85)));
+    }
+    return { images: imgs };
+  }
+  if (["docx", "docm"].includes(ext)) { const m = await loadScript(CDN + "mammoth/1.6.0/mammoth.browser.min.js", "mammoth"); return { text: (await m.extractRawText({ arrayBuffer: await file.arrayBuffer() })).value }; }
+  if (["xlsx", "xls", "xlsm", "ods", "numbers"].includes(ext) && window.XLSX) { const wb = XLSX.read(await file.arrayBuffer(), { type: "array" }); return { text: wb.SheetNames.slice(0, 3).map(n => XLSX.utils.sheet_to_csv(wb.Sheets[n])).join("\n\n") }; }
+  if (isImg({ filename: file.name, mime: file.type }) || /^image\//.test(file.type)) return { images: [await shrink(file)] };
+  if (["txt", "csv", "md", "json", "html", "htm", "xml", "rtf", "eml", "vcf", "tsv"].includes(ext)) return { text: (await file.text()).slice(0, 120000) };
+  return null;
+}
+async function readDoc(d, file, keepKunde) {
+  if (!CAP.sample) throw { message: "Auslesen ist hier nicht verfügbar" };
+  file ||= new File([await getDocBlob(d)], d.filename, { type: d.mime || "" });
+  const src = await extractText(file); if (!src) { toast("Dieses Format kann nicht ausgelesen werden – die Datei ist aber gespeichert.", 4000); return; }
+  if (src.images && !CAP.images) throw { code: "images_unavailable" };
+  const prompt = `Du liest ein Dokument eines Handwerksbetriebs aus (Dateiname: "${d.filename}").
+Antworte nur mit JSON:
+{"art":"Angebot|Auftrag|Rechnung|Eingangsrechnung|Lieferschein|Foto|Plan / Zeichnung|Vertrag|Sonstiges","nummer":"","datum":"YYYY-MM-DD","betrag":null,"titel":"kurze Beschreibung, max. 8 Wörter","lieferant":"","baustelle":"","kunde":{"name":"","vorname":"","firma":"","strasse":"","plz":"","ort":"","telefon":"","mobil":"","email":""}}
+Regeln: "betrag" = Gesamtbetrag brutto als Zahl (ohne €). Bei Angebot, Auftrag oder Rechnung DES BETRIEBS ist "kunde" der Empfänger/Adressat, nicht der Briefkopf/Absender. Bei Rechnungen von Lieferanten (Baumarkt, Großhandel usw.) art="Eingangsrechnung", Lieferant in "lieferant", "kunde" leer, außer eine Kommission/Baustelle nennt einen Kunden. Bei einem Foto: art="Foto", titel beschreibt kurz, was zu sehen ist. Unbekanntes leer lassen bzw. null. Nichts erfinden.
+${src.text ? "Inhalt:\n" + src.text.slice(0, 100000) : "Das Dokument ist als Bild beigefügt."}`;
+  const r = await CAP.sample.json(prompt, src.images ? { images: src.images.slice(0, CAP.images?.maxCount || 1) } : {});
+  const upd = { ...d };
+  if (r.art && DART.includes(r.art)) upd.art = r.art;
+  if (r.nummer) upd.nummer = String(r.nummer); if (parseDate(r.datum)) upd.datum = parseDate(r.datum);
+  if (num(r.betrag) != null) upd.betrag = num(r.betrag); if (r.titel) upd.titel = r.titel; if (r.lieferant) upd.lieferant = r.lieferant;
+  if (upd.art === "Rechnung" || upd.art === "Eingangsrechnung") upd.status = "offen";
+  const kd = r.kunde || {};
+  if (!keepKunde && (kd.name || kd.firma)) {
+    let k = matchKunde(kd.firma) || matchKunde([kd.vorname, kd.name].filter(Boolean).join(" ")) || matchKunde(kd.name);
+    if (!k) { k = { createdAt: Date.now(), nr: String(nextNr()), ...Object.fromEntries(Object.entries(kd).map(([a, b]) => [a, String(b ?? "").trim()])), baustellen: r.baustelle || "", notizen: "Angelegt aus " + d.filename };
+      await Store.put("kunden", k); toast("Neuer Kunde angelegt: " + kName(k), 3500); }
+    else { const fill = {}; for (const [a, b] of Object.entries(kd)) if (b && !k[a]) fill[a] = String(b).trim(); if (Object.keys(fill).length) await Store.put("kunden", { ...k, ...fill }); }
+    upd.kundeId = k.id;
+  }
+  if (r.baustelle && !upd.notiz) upd.notiz = "Baustelle: " + r.baustelle;
+  await Store.put("dokumente", upd); if (editDoc?.id === upd.id) openDoc(upd.id);
+  return upd;
+}
+function renderDocs() {
+  const fa = $("#dArt").value, fs = $("#dStat").value, q = $("#dSearch").value.trim().toLowerCase();
+  const list = [...S.dokumente].filter(d => (!fa || d.art === fa) && (!fs || d.status === fs) &&
+    (!q || [d.nummer, d.titel, d.filename, d.lieferant, kName(kById(d.kundeId)), d.notiz].join(" ").toLowerCase().includes(q))).sort((a, b) => (b.datum || "").localeCompare(a.datum || "") || b.createdAt - a.createdAt);
+  const sumOf = (art, st) => S.dokumente.filter(d => d.art === art && (!st || d.status === st)).reduce((s, d) => s + (num(d.betrag) || 0), 0);
+  const cnt = (art, st) => S.dokumente.filter(d => d.art === art && d.status === st).length;
+  $("#dKpis").innerHTML = [["Offene Angebote", `${cnt("Angebot", "offen")} · ${eur(sumOf("Angebot", "offen"))}`], ["Offene Rechnungen", eur(sumOf("Rechnung", "offen"))],
+    ["Bezahlt (Rechnungen)", eur(sumOf("Rechnung", "bezahlt"))], ["Eingangsrechn. offen", eur(sumOf("Eingangsrechnung", "offen"))]].map(([l, v]) => `<div class="kpi"><span>${l}</span><b style="font-size:1.05rem">${v}</b></div>`).join("");
+  $("#dBody").innerHTML = list.length ? list.map(d => `<tr class="click" data-id="${d.id}"><td class="d">${fmtDate(d.datum)}</td><td>${esc(d.art)}</td><td class="d">${esc(d.nummer)}</td>
+    <td>${esc(kName(kById(d.kundeId)) || d.lieferant || d.kunde || "")}</td><td>${esc(d.titel)}</td><td class="n">${d.betrag != null ? eur(num(d.betrag)) : ""}</td>
+    <td><span class="pill ${esc(d.status)}">${esc(d.status)}</span></td><td><span class="fileic">${esc(extOf(d.filename) || "datei")}</span></td></tr>`).join("")
+    : `<tr><td colspan="8" class="empty">${S.dokumente.length ? "Nichts gefunden." : "Noch keine Dokumente. Lade oben Angebote, Rechnungen, Fotos oder andere Dateien hoch."}</td></tr>`;
+}
+["#dArt", "#dStat"].forEach(s => $(s).addEventListener("change", renderDocs)); $("#dSearch").addEventListener("input", renderDocs);
+$("#dBody").addEventListener("click", e => { const tr = e.target.closest("tr[data-id]"); if (tr) openDoc(tr.dataset.id); });
+let editDoc = null;
+function openDoc(id) {
+  const d = S.dokumente.find(x => x.id === id); if (!d) return; editDoc = d;
+  if (location.hash !== "#dokumente") go("dokumente");
+  const box = $("#dEdit"); box.hidden = false;
+  box.innerHTML = `<div class="row between" style="margin-bottom:10px"><h3 style="margin:0">${esc(d.filename)}</h3><span class="nr">${fmtSize(d.size || 0)}</span></div>
+    ${isImg(d) ? `<img class="thumb" id="dThumb" alt="${esc(d.titel || d.filename)}" style="margin-bottom:12px" hidden>` : ""}
+    <form class="grid" id="docForm" autocomplete="off">
+      <label>Art<select id="d_art">${DART.map(a => `<option ${a === d.art ? "selected" : ""}>${a}</option>`).join("")}</select></label>
+      <label>Nummer<input id="d_nummer" value="${esc(d.nummer)}"></label>
+      <label>Datum<input type="date" id="d_datum" value="${esc(d.datum)}"></label>
+      <label>Betrag brutto €<input id="d_betrag" inputmode="decimal" value="${d.betrag != null ? fmtNum(num(d.betrag), 2) : ""}"></label>
+      <label>Status<select id="d_status">${DSTAT.map(a => `<option ${a === d.status ? "selected" : ""}>${a}</option>`).join("")}</select></label>
+      <label>Kunde<input id="d_kunde" list="dlKunden" value="${esc(kName(kById(d.kundeId)) || d.kunde || "")}"></label>
+      <label>Lieferant<input id="d_lieferant" value="${esc(d.lieferant)}"></label>
+      <label class="wide">Titel<input id="d_titel" value="${esc(d.titel)}"></label>
+      <label class="full">Notiz<textarea id="d_notiz">${esc(d.notiz)}</textarea></label>
+      <div class="row full">
+        <button class="btn pri" type="submit">Speichern</button>
+        <button class="btn" type="button" id="dDl">Datei öffnen / teilen</button>
+        ${CAP.sample ? `<button class="btn ai" type="button" id="dRead">Mit Claude auslesen</button>` : ""}
+        ${d.kundeId ? `<button class="btn" type="button" id="dToK">Zum Kunden</button>` : ""}
+        <button class="btn" type="button" id="dClose">Schließen</button>
+        <button class="btn del" type="button" id="dDel">Löschen</button>
+      </div>
+    </form>`;
+  $("#docForm").addEventListener("submit", async e => { e.preventDefault();
+    const kt = $("#d_kunde").value.trim(), k = matchKunde(kt);
+    const upd = { ...editDoc, art: $("#d_art").value, nummer: $("#d_nummer").value.trim(), datum: $("#d_datum").value, betrag: num($("#d_betrag").value), status: $("#d_status").value,
+      kundeId: k?.id || null, kunde: k ? "" : kt, lieferant: $("#d_lieferant").value.trim(), titel: $("#d_titel").value.trim(), notiz: $("#d_notiz").value };
+    await safe(Store.put("dokumente", upd), "Gespeichert"); editDoc = upd; });
+  $("#dDl").addEventListener("click", () => downloadDoc(editDoc));
+  if (isImg(d)) getDocBlob(d).then(b => { const im = $("#dThumb"); if (im) { im.src = URL.createObjectURL(b); im.hidden = false; } }).catch(() => {});
+  $("#dRead")?.addEventListener("click", async e => { const b = e.currentTarget; b.disabled = true; b.textContent = "Wird ausgelesen …";
+    try { await readDoc(editDoc, null, false); toast("Ausgelesen – bitte prüfen"); } catch (err) { toast(aiErr(err), 4000); b.disabled = false; b.textContent = "Mit Claude auslesen"; } });
+  $("#dToK")?.addEventListener("click", () => openKunde(kById(editDoc.kundeId)));
+  $("#dClose").addEventListener("click", () => { box.hidden = true; editDoc = null; });
+  $("#dDel").addEventListener("click", e => armDelete(e.currentTarget, async () => {
+    const d = editDoc; await safe(Store.del("dokumente", d.id), "Dokument gelöscht"); try { await idbDel("files", d.assetId); } catch {}
+    box.hidden = true; editDoc = null; }));
+  box.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+$("#dFile").addEventListener("change", e => { const f = [...e.target.files]; e.target.value = ""; uploadDocs(f); });
+function dropZone(el, fn) {
+  el.addEventListener("dragover", e => { e.preventDefault(); el.classList.add("over"); });
+  el.addEventListener("dragleave", () => el.classList.remove("over"));
+  el.addEventListener("drop", e => { e.preventDefault(); el.classList.remove("over"); const f = [...e.dataTransfer.files]; if (f.length) fn(f); });
+}
+dropZone($("#dDrop"), f => uploadDocs(f));
+
+/* ---------- Import ---------- */
+let iTarget = "auto", parsed = null;
+function setTargetBtn(t) { iTarget = t; $$("#iTarget button").forEach(x => x.setAttribute("aria-pressed", x.dataset.t === t)); }
+$("#iTarget").addEventListener("click", e => { const b = e.target.closest("button"); if (!b) return; setTargetBtn(b.dataset.t); if (parsed) showMapping(true); });
+const norm = s => String(s || "").toLowerCase().replace(/ß/g, "ss").replace(/ä/g, "ae").replace(/ö/g, "oe").replace(/ü/g, "ue").replace(/[^a-z0-9]/g, "");
+const FIELDS = {
+  fahrten: [["datum", "Datum", ["datum", "date", "tag", "fahrtdatum"]], ["start", "Start", ["start", "von", "abfahrt", "startort", "abfahrtsort", "from", "ausgangsort"]],
+    ["ziel", "Ziel", ["ziel", "nach", "zielort", "to", "destination", "fahrziel"]], ["kunde", "Kunde / Baustelle", ["kunde", "kundebaustelle", "baustelle", "customer", "projekt", "auftraggeber", "geschaeftspartner"]],
+    ["anlass", "Anlass", ["anlass", "zweck", "grund", "reisezweck", "purpose", "taetigkeit", "bemerkung"]], ["km", "Kilometer", ["kilometer", "km", "strecke", "distanz", "gefahrenekm", "entfernung", "kmgefahren"]],
+    ["kmStart", "km-Stand Start", ["kmstandstart", "anfangskm", "kmanfang", "kmstandbeginn", "tachostart", "kmstandanfang", "kmbeginn", "anfangskilometerstand"]],
+    ["kmEnde", "km-Stand Ende", ["kmstandende", "endkm", "kmende", "tachoende", "endkilometerstand"]], ["art", "Art (privat/geschäftl.)", ["art", "fahrtart", "typ", "kategorie"]]],
+  kunden: [["name", "Name / Nachname", ["name", "nachname", "kunde", "kundenname", "fullname", "lastname", "familienname", "name1"]], ["vorname", "Vorname", ["vorname", "firstname", "givenname"]],
+    ["firma", "Firma", ["firma", "unternehmen", "company", "organisation", "organization", "firmenname", "name2"]], ["ansprechpartner", "Ansprechpartner", ["ansprechpartner", "kontakt", "contact", "kontaktperson"]],
+    ["strasse", "Straße", ["strasse", "str", "street", "adresse", "anschrift", "address", "strassehausnummer"]], ["plz", "PLZ", ["plz", "postleitzahl", "zip", "postalcode"]], ["ort", "Ort", ["ort", "stadt", "city", "wohnort"]],
+    ["telefon", "Telefon", ["telefon", "tel", "phone", "festnetz", "telefonnummer", "telefon1"]], ["mobil", "Mobil", ["mobil", "handy", "mobile", "mobilnummer", "handynummer", "mobiltelefon"]],
+    ["email", "E-Mail", ["email", "mail", "emailadresse"]], ["baustellen", "Baustellen", ["baustelle", "baustellen", "objekt", "objekte", "projekt"]],
+    ["notizen", "Notizen", ["notiz", "notizen", "bemerkung", "bemerkungen", "info", "notes", "kommentar"]], ["nr", "Kundennummer", ["kundennummer", "kundennr", "nr", "nummer", "id", "kdnr"]]]
+};
+function guess(target, headers) {
+  const used = new Set(), map = {};
+  for (const [key, , syn] of FIELDS[target]) {
+    let idx = headers.findIndex((h, i) => !used.has(i) && syn.includes(norm(h)));
+    if (idx < 0) idx = headers.findIndex((h, i) => !used.has(i) && norm(h) && syn.some(s => s.length > 3 && norm(h).includes(s)));
+    if (idx >= 0) { map[key] = idx; used.add(idx); }
+  }
+  return map;
+}
+function detectTarget(headers) { return Object.keys(guess("fahrten", headers)).length >= Object.keys(guess("kunden", headers)).length ? "fahrten" : "kunden"; }
+function splitCSV(text) {
+  const first = text.split(/\r?\n/).find(l => l.trim()) || "";
+  const d = ["\t", ";", ",", "|"].map(c => [c, first.split(c).length]).sort((a, b) => b[1] - a[1])[0][0];
+  const rows = []; let row = [], f = "", q = false;
+  for (let i = 0; i < text.length; i++) { const c = text[i];
+    if (q) { if (c === '"' && text[i + 1] === '"') { f += '"'; i++; } else if (c === '"') q = false; else f += c; }
+    else if (c === '"' && f === "") q = true; else if (c === d) { row.push(f.trim()); f = ""; }
+    else if (c === "\n" || c === "\r") { if (c === "\r" && text[i + 1] === "\n") i++; row.push(f.trim()); if (row.some(x => x)) rows.push(row); row = []; f = ""; }
+    else f += c; }
+  row.push(f.trim()); if (row.some(x => x)) rows.push(row); return rows;
+}
+function parseMarkdown(text) {
+  return text.split(/\r?\n/).filter(l => l.includes("|") && !/^\s*\|?\s*:?-{2,}/.test(l))
+    .map(l => { const p = l.trim().split("|").map(x => x.trim()); if (p[0] === "") p.shift(); if (p[p.length - 1] === "") p.pop(); return p; });
+}
+function parseVCF(text) {
+  const t = text.replace(/\r?\n[ \t]/g, ""); const out = [];
+  const val = (card, key) => card.match(new RegExp("^" + key + "(?:;[^:\\n]*)?:(.*)$", "im"))?.[1]?.trim() || "";
+  for (const card of t.split(/BEGIN:VCARD/i).slice(1)) {
+    const k = { createdAt: Date.now() }; const np = val(card, "N").split(";");
+    k.name = np[0] || ""; k.vorname = np[1] || ""; if (!k.name) k.name = val(card, "FN");
+    k.firma = val(card, "ORG").split(";")[0];
+    for (const m of card.matchAll(/^TEL([^:\n]*):(.*)$/gim)) { if (/cell|mobil/i.test(m[1])) k.mobil ||= m[2].trim(); else k.telefon ||= m[2].trim(); }
+    k.email = val(card, "EMAIL");
+    const adr = val(card, "ADR").split(";"); k.strasse = adr[2] || ""; k.ort = adr[3] || ""; k.plz = adr[5] || "";
+    k.notizen = val(card, "NOTE").replace(/\\n/g, "\n");
+    for (const f in k) if (typeof k[f] === "string") k[f] = k[f].replace(/\\,/g, ",").replace(/\\;/g, ";");
+    if (k.name || k.firma) out.push(k);
+  }
+  return out;
+}
+const TABULAR = ["xlsx", "xls", "xlsm", "ods", "numbers", "xlsb", "csv", "tsv", "txt", "md", "json", "vcf", "vcard"];
+async function handleFiles(files) {
+  const docs = files.filter(f => !TABULAR.includes(extOf(f.name)));
+  for (const f of files.filter(f => TABULAR.includes(extOf(f.name)))) await handleFile(f);
+  if (docs.length) { go("dokumente"); uploadDocs(docs); }
+}
+async function handleFile(file) {
+  const ext = extOf(file.name);
+  try {
+    if (["xlsx", "xls", "xlsm", "ods", "numbers", "xlsb"].includes(ext)) {
+      if (!window.XLSX) { toast("Excel-Leser konnte nicht geladen werden."); return; }
+      const wb = XLSX.read(await file.arrayBuffer(), { type: "array", cellDates: true });
+      setParsed(wb.SheetNames.map(n => ({ n, rows: XLSX.utils.sheet_to_json(wb.Sheets[n], { header: 1, raw: true, defval: "" }).filter(r => r.some(c => c !== "")) })), file.name); return;
+    }
+    const text = await file.text();
+    if (ext === "vcf" || ext === "vcard" || /BEGIN:VCARD/i.test(text.slice(0, 300))) { importDirect("kunden", parseVCF(text), file.name); return; }
+    if (ext === "json") { handleJSON(JSON.parse(text), file.name); return; }
+    parseText(text, file.name);
+  } catch (e) { toast("Datei konnte nicht gelesen werden: " + e.message); }
+}
+function parseText(text, src) {
+  const t = text.trim(); if (!t) return;
+  if (/^[\[{]/.test(t)) { try { handleJSON(JSON.parse(t), src); return; } catch {} }
+  if (/BEGIN:VCARD/i.test(t)) { importDirect("kunden", parseVCF(t), src); return; }
+  const md = t.split("\n").filter(l => l.includes("|")).length >= 2 && /^\s*\|/.test(t);
+  setParsed([{ n: "Tabelle", rows: md ? parseMarkdown(t) : splitCSV(t) }], src);
+}
+function handleJSON(j, src) {
+  if (j && !Array.isArray(j) && (j.kunden || j.fahrten)) { restoreBackup(j, src); return; }
+  const arr = Array.isArray(j) ? j : Object.values(j).find(Array.isArray) || [];
+  const keys = [...new Set(arr.flatMap(o => Object.keys(o || {})))];
+  setParsed([{ n: "JSON", rows: [keys, ...arr.map(o => keys.map(k => o?.[k] ?? ""))] }], src);
+}
+let sheetIdx = 0, mapping = {}, curTarget = "fahrten";
+function setParsed(sheets, src, force, hint) {
+  parsed = { sheets, src, hint }; if (force) setTargetBtn(force);
+  sheetIdx = Math.max(0, sheets.findIndex(s => s.rows.length > 1)); showMapping(true);
+}
+function showMapping(fresh) {
+  const box = $("#iMap"), sh = parsed.sheets[sheetIdx]; if (!sh || sh.rows.length < 1) { toast("Keine Tabelle gefunden."); return; }
+  const headers = sh.rows[0].map(String); curTarget = iTarget === "auto" ? detectTarget(headers) : iTarget;
+  if (fresh) mapping = guess(curTarget, headers);
+  const cols = headers.map((h, i) => `<option value="${i}">${esc(h || "Spalte " + (i + 1))}</option>`).join("");
+  box.hidden = false;
+  box.innerHTML = `<h3>${esc(parsed.src)} → ${curTarget === "fahrten" ? "Fahrten" : "Kunden"}</h3>
+    ${parsed.hint ? `<p class="note" style="color:var(--mark);margin-bottom:8px"><b>Hinweis zum Ablesen:</b> ${esc(parsed.hint)}</p>` : ""}
+    ${parsed.sheets.length > 1 ? `<label style="max-width:260px;margin-bottom:10px">Tabellenblatt<select id="iSheet">${parsed.sheets.map((s, i) => `<option value="${i}" ${i === sheetIdx ? "selected" : ""}>${esc(s.n)} (${Math.max(0, s.rows.length - 1)} Zeilen)</option>`).join("")}</select></label>` : ""}
+    <p class="note" style="margin-bottom:10px">${sh.rows.length - 1} Zeilen gefunden. Prüfe, welche Spalte wohin gehört:</p>
+    <div class="map">${FIELDS[curTarget].map(([k, l]) => `<label>${l}<select data-k="${k}"><option value="">– nicht übernehmen –</option>${cols}</select></label>`).join("")}</div>
+    <h3 style="margin-top:16px">Vorschau</h3><div class="tw" id="iPrev"></div>
+    <div class="row" style="margin-top:12px"><button class="btn pri" id="iGo">${sh.rows.length - 1} Einträge importieren</button><button class="btn" id="iCancel">Abbrechen</button><span id="iProg" class="muted"></span></div>`;
+  box.querySelectorAll("select[data-k]").forEach(s => { s.value = mapping[s.dataset.k] ?? ""; s.addEventListener("change", () => { mapping[s.dataset.k] = s.value === "" ? undefined : +s.value; preview(); }); });
+  $("#iSheet")?.addEventListener("change", e => { sheetIdx = +e.target.value; showMapping(true); });
+  $("#iCancel").addEventListener("click", () => { box.hidden = true; parsed = null; });
+  $("#iGo").addEventListener("click", runImport); preview();
+  if (Object.keys(mapping).length < 2) toast("Keine Spaltenüberschriften erkannt – bitte Zuordnung prüfen.");
+  box.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+function buildRecords() {
+  const rows = parsed.sheets[sheetIdx].rows.slice(1), F = FIELDS[curTarget];
+  let lastDate = null;
+  return rows.map(r => { const o = {}; for (const [k] of F) if (mapping[k] != null) o[k] = r[mapping[k]]; return o; })
+    .map(o => { if (curTarget !== "fahrten") return toKunde(o); const t = toTrip(o, lastDate); if (t?.datum) lastDate = t.datum; return t; }).filter(Boolean);
+}
+function toTrip(o, lastDate) {
+  const t = { createdAt: Date.now(), datum: parseDate(o.datum) || lastDate, start: String(o.start ?? "").trim(), ziel: String(o.ziel ?? "").trim(),
+    anlass: String(o.anlass ?? "").trim(), km: num(o.km), kmStart: num(o.kmStart), kmEnde: num(o.kmEnde), art: o.art ? parseArt(o.art) : "g" };
+  if (t.km == null && t.kmStart != null && t.kmEnde != null) t.km = t.kmEnde - t.kmStart;
+  const kt = String(o.kunde ?? "").trim(), k = matchKunde(kt); t.kundeId = k?.id || null; t.kunde = k ? "" : kt;
+  if (!t.start && !t.ziel && t.km == null) return null; return t;
+}
+function toKunde(o) { const k = { createdAt: Date.now() }; for (const [f] of FIELDS.kunden) k[f] = String(o[f] ?? "").trim(); return (k.name || k.firma) ? k : null; }
+function preview() {
+  const recs = buildRecords().slice(0, 8), F = FIELDS[curTarget].filter(([k]) => mapping[k] != null);
+  $("#iPrev").innerHTML = `<table><thead><tr>${F.map(([, l]) => `<th>${l}</th>`).join("")}</tr></thead><tbody>${recs.map(r => `<tr>${F.map(([k]) =>
+    `<td>${esc(k === "datum" ? fmtDate(r.datum) || "⚠ ungültig" : k === "kunde" ? (r.kundeId ? kName(kById(r.kundeId)) : r.kunde) : k === "art" ? ART[r.art][0] : r[k] ?? "")}</td>`).join("")}</tr>`).join("")}</tbody></table>`;
+}
+async function runImport() {
+  const recs = buildRecords(); if (!recs.length) { toast("Nichts zu importieren – Zuordnung prüfen."); return; }
+  if (curTarget === "kunden") { let n = nextNr(); recs.forEach(k => { if (!k.nr) k.nr = String(n++); }); }
+  $("#iGo").disabled = true;
+  await safe(Store.putMany(curTarget, recs, n => $("#iProg").textContent = `${n} / ${recs.length} …`), `${recs.length} ${curTarget === "fahrten" ? "Fahrten" : "Kunden"} importiert`);
+  $("#iMap").hidden = true; parsed = null; go(curTarget);
+}
+async function importDirect(kind, recs, src) {
+  if (!recs.length) { toast("Keine Einträge in " + src + " gefunden."); return; }
+  let n = nextNr(); recs.forEach(k => { if (!k.nr) k.nr = String(n++); });
+  await safe(Store.putMany(kind, recs), `${recs.length} Kontakte aus ${src} importiert`); go(kind);
+}
+async function restoreBackup(j, src) {
+  const kd = (j.kunden || []).map(x => ({ ...x })), fd = (j.fahrten || []).map(x => ({ ...x })), dd = (j.dokumente || []).map(x => ({ ...x }));
+  await safe((async () => { await Store.putMany("kunden", kd); await Store.putMany("fahrten", fd); if (dd.length) await Store.putMany("dokumente", dd);
+    if (j.settings) { Object.assign(S.settings, j.settings); await Store.saveSettings(); fillSettings(); } })(), `Sicherung eingespielt: ${kd.length} Kunden, ${fd.length} Fahrten`);
+}
+$("#iFile").addEventListener("change", e => { const f = [...e.target.files]; e.target.value = ""; if (f.length) handleFiles(f); });
+$("#iPasteBtn").addEventListener("click", () => parseText($("#iPaste").value, "Eingefügter Text"));
+dropZone($("#drop"), handleFiles);
+
+/* ---------- Export ---------- */
+function tripRows() { return [["Datum", "Start", "Ziel", "Kunde / Baustelle", "Anlass", "Art", "Kilometer", "km-Stand Start", "km-Stand Ende"],
+  ...withOdo().map(t => [fmtDate(t.datum), t.start, t.ziel, kundeLabel(t), t.anlass, ART[t.art || "g"][0], t._km, t._s ?? "", t._e ?? ""])]; }
+function kundenRows() { const F = [...FIELDS.kunden, ["aufmass", "Maße / Aufmaß"]]; return [[...F.map(f => f[1]), "Termine"], ...S.kunden.map(k => [...F.map(([f]) => k[f] || ""), (k.termine || []).map(t => `${fmtDate(t.datum)} ${t.zeit || ""} ${t.text}`).join(" | ")])]; }
+function docRows() { return [["Datum", "Art", "Nummer", "Kunde", "Lieferant", "Titel", "Betrag brutto", "Status", "Datei", "Notiz"],
+  ...[...S.dokumente].sort((a, b) => (a.datum || "").localeCompare(b.datum || "")).map(d => [fmtDate(d.datum), d.art, d.nummer || "", kName(kById(d.kundeId)) || d.kunde || "", d.lieferant || "", d.titel || "", num(d.betrag) ?? "", d.status, d.filename, d.notiz || ""])]; }
+const toCSV = rows => "﻿" + rows.map(r => r.map(v => { const s = typeof v === "number" ? String(v).replace(".", ",") : String(v ?? ""); return /[;"\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; }).join(";")).join("\r\n");
+const MIME = { csv: "text/csv", json: "application/json", xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", pdf: "application/pdf", txt: "text/plain",
+  png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" };
+async function save(filename, data) {
+  const type = (data instanceof Blob && data.type) || MIME[extOf(filename)] || "application/octet-stream";
+  const file = new File([data], filename, { type });
+  try {
+    if (navigator.canShare?.({ files: [file] })) { await navigator.share({ files: [file], title: filename }); return true; }
+  } catch (e) { if (e?.name === "AbortError") return false; }
+  const a = document.createElement("a"); a.href = URL.createObjectURL(file); a.download = filename; document.body.appendChild(a); a.click();
+  setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 10000); toast("Gespeichert: " + filename); return true;
+}
+async function backupNow() {
+  const ok = await save(`Sicherung_${today()}.json`, JSON.stringify({ app: "kunden-fahrtenbuch", version: 2, exportiert: new Date().toISOString(), ...S }, null, 1));
+  if (ok) { S.settings.lastBackup = Date.now(); await Store.saveSettings(); toast("Sicherung erstellt"); }
+}
+function xlsx(rows, sheet) { const wb = XLSX.utils.book_new(); const ws = XLSX.utils.aoa_to_sheet(rows); ws["!cols"] = rows[0].map(() => ({ wch: 18 })); XLSX.utils.book_append_sheet(wb, ws, sheet);
+  return new Blob([XLSX.write(wb, { type: "array", bookType: "xlsx" })]); }
+$$("[data-ex]").forEach(b => b.addEventListener("click", () => {
+  const d = today(), x = b.dataset.ex;
+  if (x === "fahrten-csv") save(`Fahrtenbuch_${d}.csv`, toCSV(tripRows()));
+  if (x === "fahrten-xlsx") save(`Fahrtenbuch_${d}.xlsx`, xlsx(tripRows(), "Fahrtenbuch"));
+  if (x === "kunden-csv") save(`Kunden_${d}.csv`, toCSV(kundenRows()));
+  if (x === "kunden-xlsx") save(`Kunden_${d}.xlsx`, xlsx(kundenRows(), "Kunden"));
+  if (x === "docs-xlsx") save(`Dokumente_${d}.xlsx`, xlsx(docRows(), "Dokumente"));
+  if (x === "backup") backupNow();
+}));
+
+/* ---------- Einstellungen ---------- */
+function fillSettings() { const s = S.settings; $("#s_fz").value = s.fahrzeug || ""; $("#s_kz").value = s.kennzeichen || ""; $("#s_km").value = s.startKm ?? "";
+  $("#s_kmd").value = s.startKmDatum || ""; $("#s_ps").value = s.pauschale != null ? fmtNum(num(s.pauschale), 2) : ""; $("#s_orte").value = (s.orte || []).join("\n"); }
+$("#sForm").addEventListener("submit", async e => { e.preventDefault();
+  Object.assign(S.settings, { fahrzeug: $("#s_fz").value.trim(), kennzeichen: $("#s_kz").value.trim(), startKm: num($("#s_km").value), startKmDatum: $("#s_kmd").value || "",
+    pauschale: num($("#s_ps").value) ?? 0.30, orte: $("#s_orte").value.split("\n").map(x => x.trim()).filter(Boolean) });
+  await safe(Store.saveSettings(), "Einstellungen gespeichert"); });
+$("#sCalc").addEventListener("click", () => { const now = num($("#s_now").value); if (now == null) { $("#sCalcOut").textContent = "Bitte den heutigen Tachostand eintragen."; return; }
+  const tot = S.fahrten.reduce((s, t) => s + (num(t.km) || 0), 0), first = sortedTrips()[0];
+  const start = now - tot; $("#s_km").value = start; $("#s_kmd").value = first?.datum || "";
+  $("#sCalcOut").innerHTML = `Eingetragen sind ${fmtNum(tot)} km. Vorschlag: Anfangs-km-Stand <b>${fmtNum(start)}</b> zum ${fmtDate(first?.datum) || "Beginn"}. Das stimmt nur, wenn seitdem <b>alle</b> Fahrten (auch privat) eingetragen sind. Zum Übernehmen oben auf „Speichern“ tippen.`; });
+
+/* ---------- Hinweise ---------- */
+$("#bkpBtn").addEventListener("click", backupNow);
+$("#welcomeBtn").addEventListener("click", () => go("import"));
+function renderHints() {
+  const has = S.fahrten.length || S.kunden.length, lb = S.settings.lastBackup;
+  $("#welcome").hidden = !ready || !!has;
+  $("#bkp").hidden = !ready || !has || (lb && Date.now() - lb < 14 * 864e5);
+  setStatus("Gespeichert auf diesem Gerät · " + (lb ? "letzte Sicherung " + new Date(lb).toLocaleDateString("de-DE") : "noch keine Sicherung"));
+}
+
+/* ---------- Start ---------- */
+let ready = false;
+function renderAll() { renderKunden(); renderFahrten(); renderDocs(); if (editK) renderKExtra();
+  renderHints(); }
+resetTripForm(); show(location.hash.slice(1)); renderAll();
+Store.init().then(() => { ready = true; renderAll(); });
+CAP.assets = true; $("#kUpLbl").hidden = false;
+try { navigator.storage?.persist?.(); } catch {}
+if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
+})();
+</script>
+</body>
+</html>
