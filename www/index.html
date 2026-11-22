@@ -3,11 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>Fahrtenbuch</title>
+<title>Kunden</title>
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
-<meta name="apple-mobile-web-app-title" content="Fahrtenbuch">
+<meta name="apple-mobile-web-app-title" content="Kunden">
 <meta name="theme-color" content="#1f5a46">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icons/icon-180.png">
@@ -70,6 +70,7 @@ textarea{min-height:80px;resize:vertical}
 input:focus,select:focus,textarea:focus,button:focus-visible{outline:2px solid var(--mark);outline-offset:1px}
 .btn{font:600 .95rem var(--f-body);border:1px solid var(--line);background:var(--surface);color:var(--fg);padding:8px 14px;border-radius:6px;cursor:pointer;white-space:nowrap;display:inline-flex;align-items:center;gap:6px}
 .btn:hover{background:var(--sunk)}
+label.btn{text-transform:none;letter-spacing:0;font-size:.95rem;flex-direction:row;color:var(--fg)}
 .btn:disabled{opacity:.55;cursor:default}
 .btn.pri{background:var(--accent);border-color:var(--accent);color:var(--accent-fg)}
 .btn.pri:hover{filter:brightness(1.08)}
@@ -126,6 +127,25 @@ details summary{cursor:pointer;font-weight:600}
 .thumb{max-width:100%;max-height:340px;border-radius:6px;border:1px solid var(--line);display:block}
 .sub{border-top:1px solid var(--line);padding-top:14px;margin-top:16px}
 .fileic{font:500 .72rem var(--f-mono);background:var(--sunk);padding:2px 6px;border-radius:4px;text-transform:uppercase}
+.khead h2{font-size:1.8rem}
+.ktabs{align-self:flex-start;flex-wrap:wrap}
+.ktabs button{padding:9px 16px;font-size:.95rem}
+.fgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px}
+.ftile{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:0;overflow:hidden;cursor:pointer;text-align:left;font:inherit;color:inherit;display:flex;flex-direction:column;min-width:0}
+.ftile:hover{border-color:var(--accent)}
+.ftile .fprev{aspect-ratio:4/3;background:var(--sunk);display:flex;align-items:center;justify-content:center;overflow:hidden;max-width:100%}
+.ftile .fprev img{width:100%;height:100%;object-fit:cover}
+.ftile .fprev span{font:600 1.1rem var(--f-mono);color:var(--muted);text-transform:uppercase}
+.ftile .fcap{padding:8px 10px;display:flex;flex-direction:column;gap:2px;min-width:0}
+.ftile .fcap b{font-size:.9rem;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ftile .fcap small{color:var(--muted);font-size:.78rem}
+.viewer{position:fixed;inset:0;z-index:30;background:var(--bg);display:flex;flex-direction:column;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+.vbar{display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap;padding:10px max(16px,env(safe-area-inset-right,0px)) 10px max(16px,env(safe-area-inset-left,0px));border-bottom:1px solid var(--line);background:var(--surface)}
+.vbar b{min-width:0;overflow-wrap:anywhere}
+.vbody{flex:1;overflow:auto;display:flex;align-items:center;justify-content:center;padding:12px;-webkit-overflow-scrolling:touch}
+.vbody img{max-width:100%;max-height:100%;object-fit:contain}
+.vbody iframe{width:100%;height:100%;border:0;background:#fff}
+.ccard .files{color:var(--accent);font-weight:600}
 @media (prefers-reduced-motion:no-preference){.toast{animation:up .2s ease-out}@keyframes up{from{opacity:0;transform:translate(-50%,8px)}}
   .btn.rec{animation:pulse 1.2s ease-in-out infinite}@keyframes pulse{50%{filter:brightness(1.25)}}}
 </style>
@@ -133,11 +153,11 @@ details summary{cursor:pointer;font-weight:600}
 <body>
 
 <header><div class="wrap hbar">
-  <div class="brand"><i></i>Kunden &amp; Fahrtenbuch</div>
+  <div class="brand"><i></i>Kunden <span style="font-weight:500;color:var(--muted)">&amp; Fahrtenbuch</span></div>
   <nav id="nav">
-    <button data-v="fahrten" aria-current="page">Fahrtenbuch</button>
-    <button data-v="kunden">Kunden</button>
-    <button data-v="dokumente">Dokumente</button>
+    <button data-v="kunden" aria-current="page">Kunden</button>
+    <button data-v="fahrten">Fahrtenbuch</button>
+    <button data-v="dokumente">Alle Dateien</button>
     <button data-v="import">Import / Export</button>
     <button data-v="settings">Fahrzeug</button>
   </nav>
@@ -147,16 +167,7 @@ details summary{cursor:pointer;font-weight:600}
 <main class="wrap">
 
 <!-- FAHRTENBUCH -->
-<section class="sec" id="v-fahrten">
-  <div id="welcome" class="banner" hidden>
-    <p><b>Willkommen!</b> Deine Daten werden nur auf diesem Gerät gespeichert. Hast du eine Sicherung aus der Claude-Version (Datei <i>Sicherung_….json</i>)? Dann spiel sie unter „Import / Export“ ein.</p>
-    <button class="btn pri" id="welcomeBtn">Sicherung einspielen</button>
-  </div>
-  <div id="bkp" class="banner" hidden>
-    <p id="bkpText"><b>Zeit für eine Sicherung.</b> Die Daten liegen nur auf diesem Gerät. Speichere die Sicherung in „Dateien“ (iCloud Drive), dann ist nichts verloren, wenn das iPad kaputtgeht.</p>
-    <button class="btn pri" id="bkpBtn">Jetzt sichern</button>
-  </div>
-
+<section class="sec" id="v-fahrten" hidden>
   <div class="panel">
     <div class="row between" style="margin-bottom:10px">
       <h3 id="fTitle" style="margin:0">Neue Fahrt</h3>
@@ -203,21 +214,64 @@ details summary{cursor:pointer;font-weight:600}
   <p class="note">Kursive km-Stände sind berechnet (aus dem Anfangs-km-Stand unter „Fahrzeug“ plus allen eingetragenen Fahrten). Eine Zeile anklicken, um sie zu bearbeiten.</p>
 </section>
 
-<!-- KUNDEN -->
-<section class="sec" id="v-kunden" hidden>
+<!-- KUNDEN (Startseite) -->
+<section class="sec" id="v-kunden">
+  <div id="welcome" class="banner" hidden>
+    <p><b>Willkommen!</b> Deine Daten werden nur auf diesem Gerät gespeichert. Hast du eine Sicherung aus der Claude-Version (Datei <i>Sicherung_….json</i>)? Dann spiel sie unter „Import / Export“ ein.</p>
+    <button class="btn pri" id="welcomeBtn">Sicherung einspielen</button>
+  </div>
+  <div id="bkp" class="banner" hidden>
+    <p id="bkpText"><b>Zeit für eine Sicherung.</b> Die Daten liegen nur auf diesem Gerät. Speichere die Sicherung in „Dateien“ (iCloud Drive), dann ist nichts verloren, wenn das iPad kaputtgeht.</p>
+    <button class="btn pri" id="bkpBtn">Jetzt sichern</button>
+  </div>
+
   <div class="row between">
-    <h2>Kunden</h2>
+    <h2>Kunden <span class="muted" id="kCount" style="font-weight:500"></span></h2>
     <div class="row">
-      <input id="kSearch" placeholder="Kunden suchen …" style="width:220px">
+      <input id="kSearch" type="search" placeholder="Kunden suchen …" style="width:240px">
       <button class="btn pri" id="kNew">Neuer Kunde</button>
     </div>
   </div>
   <div class="panel" id="upcoming" hidden></div>
-  <div class="panel" id="kEdit" hidden>
-    <div class="row between" style="margin-bottom:10px">
-      <h3 id="kTitle" style="margin:0">Neuer Kunde</h3>
-      <span class="nr" id="kNr"></span>
+  <div class="clist" id="kList"></div>
+</section>
+
+<!-- KUNDENSEITE -->
+<section class="sec" id="v-kunde" hidden>
+  <div class="row between">
+    <button class="btn" id="kBack">‹ Alle Kunden</button>
+    <span class="nr" id="kNr"></span>
+  </div>
+  <div class="panel khead">
+    <h2 id="kTitle">Neuer Kunde</h2>
+    <p class="muted" id="kAddr" style="margin:4px 0 0"></p>
+    <div class="row" id="kContact" style="margin-top:8px"></div>
+    <div class="row" id="kActions" style="margin-top:12px">
+      <label class="btn pri" id="kCamLbl">Foto aufnehmen<input type="file" id="kCam" accept="image/*" capture="environment" hidden></label>
+      <label class="btn" id="kUpLbl">Datei hinzufügen<input type="file" id="kUp" multiple hidden></label>
+      <button class="btn" id="kTrip">Fahrt eintragen</button>
     </div>
+  </div>
+  <div class="seg ktabs" id="kTabs">
+    <button type="button" data-t="dateien" aria-pressed="true">Dateien</button>
+    <button type="button" data-t="fahrten" aria-pressed="false">Fahrten</button>
+    <button type="button" data-t="termine" aria-pressed="false">Termine</button>
+    <button type="button" data-t="daten" aria-pressed="false">Kundendaten</button>
+  </div>
+  <div id="kp-dateien" class="kpane">
+    <div class="fgrid" id="kFiles"></div>
+  </div>
+  <div id="kp-fahrten" class="kpane" hidden><div id="kTrips"></div></div>
+  <div id="kp-termine" class="kpane panel" hidden>
+    <ul class="mini" id="kTermine"></ul>
+    <form class="row" id="tForm" style="margin-top:10px;align-items:end">
+      <label style="flex:0 1 150px">Datum<input type="date" id="t_datum" required></label>
+      <label style="flex:0 1 110px">Uhrzeit<input type="time" id="t_zeit"></label>
+      <label style="flex:1 1 200px">Was<input id="t_text" placeholder="z. B. Aufmaß, Montage, Abnahme" required></label>
+      <button class="btn" type="submit">Termin hinzufügen</button>
+    </form>
+  </div>
+  <div id="kp-daten" class="kpane panel" hidden>
     <form id="kForm" class="grid" autocomplete="off">
       <label>Name / Nachname<input id="k_name"></label>
       <label>Vorname<input id="k_vorname"></label>
@@ -230,39 +284,33 @@ details summary{cursor:pointer;font-weight:600}
       <label>Mobil<input id="k_mobil" type="tel"></label>
       <label class="wide">E-Mail<input id="k_email" type="email"></label>
       <label class="wide">Baustellen / Objekte<textarea id="k_baustellen" placeholder="Eine Baustelle pro Zeile, z. B. Neubau Gartenstraße 4"></textarea></label>
-      <label class="wide"><span class="row between">Maße / Aufmaß<button type="button" class="btn sm ai mic" data-for="k_aufmass" hidden>Einsprechen</button></span><textarea id="k_aufmass" placeholder="z. B. Tür Bad: 86 × 201 cm, DIN links, Wandstärke 12 cm"></textarea></label>
-      <label class="wide"><span class="row between">Notizen<button type="button" class="btn sm ai mic" data-for="k_notizen" hidden>Einsprechen</button></span><textarea id="k_notizen" placeholder="Wünsche, Zugang, Schlüssel, Absprachen …"></textarea></label>
+      <label class="wide">Maße / Aufmaß<textarea id="k_aufmass" placeholder="z. B. Tür Bad: 86 × 201 cm, DIN links, Wandstärke 12 cm"></textarea></label>
+      <label class="wide">Notizen<textarea id="k_notizen" placeholder="Wünsche, Zugang, Schlüssel, Absprachen …"></textarea></label>
       <div class="row full">
         <button class="btn pri" type="submit">Speichern</button>
-        <button class="btn" type="button" id="kClose">Schließen</button>
+        <button class="btn" type="button" id="kClose">Abbrechen</button>
         <button class="btn del" type="button" id="kDel" hidden>Löschen</button>
       </div>
     </form>
-    <div id="kExtra" hidden>
-      <div class="sub">
-        <h3>Termine</h3>
-        <ul class="mini" id="kTermine"></ul>
-        <form class="row" id="tForm" style="margin-top:10px;align-items:end">
-          <label style="flex:0 1 150px">Datum<input type="date" id="t_datum" required></label>
-          <label style="flex:0 1 110px">Uhrzeit<input type="time" id="t_zeit"></label>
-          <label style="flex:1 1 200px">Was<input id="t_text" placeholder="z. B. Aufmaß, Montage, Abnahme" required></label>
-          <button class="btn" type="submit">Termin hinzufügen</button>
-        </form>
-      </div>
-      <div class="sub">
-        <div class="row between"><h3 style="margin:0">Dokumente &amp; Fotos</h3>
-          <label class="btn sm" id="kUpLbl" style="text-transform:none;letter-spacing:0;color:var(--fg)" hidden>Datei hinzufügen<input type="file" id="kUp" multiple hidden></label></div>
-        <ul class="mini" id="kDocs" style="margin-top:8px"></ul>
-      </div>
-      <div class="sub" id="kTrips"></div>
+  </div>
+</section>
+
+<!-- DATEI-ANSICHT -->
+<div class="viewer" id="viewer" hidden>
+  <div class="vbar">
+    <b id="vName"></b>
+    <div class="row">
+      <button class="btn" id="vShare">Teilen / Sichern</button>
+      <button class="btn" id="vEdit">Angaben</button>
+      <button class="btn pri" id="vClose">Schließen</button>
     </div>
   </div>
-  <div class="clist" id="kList"></div>
-</section>
+  <div class="vbody" id="vBody"></div>
+</div>
 
 <!-- DOKUMENTE -->
 <section class="sec" id="v-dokumente" hidden>
-  <div class="row between"><h2>Angebote, Rechnungen &amp; Dateien</h2></div>
+  <div class="row between"><h2>Alle Dateien</h2></div>
   <div class="drop" id="dDrop">
     <p style="margin:0 0 10px"><b>Dateien hierher ziehen</b> oder auswählen. Jedes Format wird auf diesem Gerät gespeichert.</p>
     <input type="file" id="dFile" multiple style="max-width:320px">
@@ -426,9 +474,10 @@ function setStatus(t) { $("#status").textContent = t; }
 async function safe(p, ok) { try { const r = await p; if (ok) toast(ok); return r; } catch (e) { toast(e?.code === "quota_exceeded" ? "Speicher voll – bitte alte Einträge löschen." : "Fehler: " + (e?.message || e)); return null; } }
 
 /* ---------- Navigation ---------- */
-const VIEWS = ["fahrten", "kunden", "dokumente", "import", "settings"];
-function show(v) { if (!VIEWS.includes(v)) v = "fahrten"; VIEWS.forEach(x => $("#v-" + x).hidden = x !== v);
-  $$("#nav button").forEach(b => b.dataset.v === v ? b.setAttribute("aria-current", "page") : b.removeAttribute("aria-current")); }
+const VIEWS = ["kunden", "kunde", "fahrten", "dokumente", "import", "settings"];
+function show(v) { if (!VIEWS.includes(v) || (v === "kunde" && !editK && !newK)) v = "kunden"; VIEWS.forEach(x => $("#v-" + x).hidden = x !== v);
+  const nv = v === "kunde" ? "kunden" : v;
+  $$("#nav button").forEach(b => b.dataset.v === nv ? b.setAttribute("aria-current", "page") : b.removeAttribute("aria-current")); }
 function go(v) { location.hash = v; show(v); window.scrollTo(0, 0); }
 $("#nav").addEventListener("click", e => { const b = e.target.closest("button"); if (b) go(b.dataset.v); });
 window.addEventListener("hashchange", () => show(location.hash.slice(1)));
@@ -448,7 +497,7 @@ function withOdo() {
 }
 
 /* ---------- Fahrtenbuch ---------- */
-let editTrip = null;
+let editTrip = null, editK = null, newK = false;
 function kundeLabel(t) { const k = kById(t.kundeId); return k ? kName(k) + (t.kunde && t.kunde !== kName(k) ? " · " + t.kunde : "") : (t.kunde || ""); }
 function filteredTrips() {
   const sel = $("#fMonth").value, q = $("#fSearch").value.trim().toLowerCase();
@@ -486,11 +535,11 @@ function renderFahrten() {
 $("#fBody").addEventListener("click", e => { const tr = e.target.closest("tr[data-id]"); if (tr) loadTrip(S.fahrten.find(t => t.id === tr.dataset.id)); });
 $("#fMonth").addEventListener("change", renderFahrten); $("#fSearch").addEventListener("input", renderFahrten);
 
-function resetTripForm(prefill) {
+function resetTripForm(prefill, title) {
   editTrip = null; $("#fForm").reset(); $("#f_datum").value = prefill?.datum || today();
   if (prefill) for (const k of ["start", "ziel", "kunde", "anlass"]) $("#f_" + k).value = prefill[k] || "";
   if (prefill?.art) $("#f_art").value = prefill.art;
-  $("#fTitle").textContent = prefill ? "Rückfahrt" : "Neue Fahrt"; $("#fCancel").hidden = true; $("#fDel").hidden = true; $("#fSave").textContent = "Speichern";
+  $("#fTitle").textContent = title || (prefill ? "Rückfahrt" : "Neue Fahrt"); $("#fCancel").hidden = true; $("#fDel").hidden = true; $("#fSave").textContent = "Speichern";
 }
 function loadTrip(t) {
   if (!t) return; editTrip = t;
@@ -636,22 +685,27 @@ $("#report").addEventListener("click", () => {
 });
 
 /* ---------- Kunden ---------- */
-let editK = null;
+let kTab = "dateien";
+const thumbs = new Map();
 function nextNr() { return Math.max(1000, ...S.kunden.map(k => parseInt(k.nr) || 0)) + 1; }
+const kAddr = k => [k.strasse, [k.plz, k.ort].filter(Boolean).join(" ")].filter(Boolean).join(", ");
 function renderKunden() {
   const q = $("#kSearch").value.trim().toLowerCase();
-  const kmBy = {}; for (const t of S.fahrten) if (t.kundeId) kmBy[t.kundeId] = (kmBy[t.kundeId] || 0) + (num(t.km) || 0);
+  const kmBy = {}, docBy = {};
+  for (const t of S.fahrten) if (t.kundeId) kmBy[t.kundeId] = (kmBy[t.kundeId] || 0) + (num(t.km) || 0);
+  for (const d of S.dokumente) if (d.kundeId) docBy[d.kundeId] = (docBy[d.kundeId] || 0) + 1;
   const list = [...S.kunden].filter(k => !q || JSON.stringify(k).toLowerCase().includes(q)).sort((a, b) => kName(a).localeCompare(kName(b), "de"));
+  $("#kCount").textContent = S.kunden.length ? "· " + S.kunden.length : "";
   $("#kList").innerHTML = list.length ? list.map(k => `<button class="ccard" data-id="${k.id}"><span class="nr">Nr. ${esc(k.nr)}</span><b>${esc(kName(k))}</b>
-    <small>${esc([k.strasse, [k.plz, k.ort].filter(Boolean).join(" ")].filter(Boolean).join(", ") || "keine Adresse")}</small>
-    <small>${esc(k.mobil || k.telefon || k.email || "")}</small>${kmBy[k.id] ? `<small>${fmtNum(kmBy[k.id])} km gefahren</small>` : ""}</button>`).join("")
-    : `<div class="empty panel">${S.kunden.length ? "Kein Kunde passt zur Suche." : "Noch keine Kunden. Lege deinen ersten Kunden an oder importiere Kontakte (Excel, CSV, vCard)."}</div>`;
+    <small>${esc(kAddr(k) || "keine Adresse")}</small>
+    <small>${esc(k.mobil || k.telefon || k.email || "")}</small>
+    <small>${docBy[k.id] ? `<span class="files">${docBy[k.id]} ${docBy[k.id] === 1 ? "Datei" : "Dateien"}</span>` : ""}${docBy[k.id] && kmBy[k.id] ? " · " : ""}${kmBy[k.id] ? fmtNum(kmBy[k.id]) + " km" : ""}</small></button>`).join("")
+    : `<div class="empty panel">${S.kunden.length ? "Kein Kunde passt zur Suche." : "Noch keine Kunden. Lege deinen ersten Kunden an oder spiel unter „Import / Export“ deine Sicherung ein."}</div>`;
   $("#dlKunden").innerHTML = S.kunden.map(k => `<option value="${esc(kName(k))}">`).join("") +
     S.kunden.flatMap(k => (k.baustellen || "").split("\n").map(x => x.trim()).filter(Boolean).map(b => `<option value="${esc(b)}">${esc(kName(k))}</option>`)).join("");
   const orte = new Set([...(S.settings.orte || []), ...S.fahrten.flatMap(t => [t.start, t.ziel])].filter(Boolean));
   $("#dlOrte").innerHTML = [...orte].map(o => `<option value="${esc(o)}">`).join("");
   $("#dlAnlass").innerHTML = [...new Set(S.fahrten.map(t => t.anlass).filter(Boolean))].map(o => `<option value="${esc(o)}">`).join("");
-  // nächste Termine
   const now = today(), up = S.kunden.flatMap(k => (k.termine || []).filter(t => t.datum >= now).map(t => ({ ...t, k }))).sort((a, b) => (a.datum + (a.zeit || "")).localeCompare(b.datum + (b.zeit || ""))).slice(0, 8);
   $("#upcoming").hidden = !up.length;
   $("#upcoming").innerHTML = `<h3>Nächste Termine</h3><ul class="mini">${up.map(t => `<li><span class="d">${new Date(t.datum + "T12:00").toLocaleDateString("de-DE", { weekday: "short", day: "2-digit", month: "2-digit" })}${t.zeit ? " · " + t.zeit : ""}</span><span class="grow">${esc(t.text)}</span><button class="btn sm" data-open="${t.k.id}">${esc(kName(t.k))}</button></li>`).join("")}</ul>`;
@@ -660,43 +714,85 @@ $("#upcoming").addEventListener("click", e => { const b = e.target.closest("[dat
 $("#kSearch").addEventListener("input", renderKunden);
 $("#kList").addEventListener("click", e => { const c = e.target.closest(".ccard"); if (c) openKunde(kById(c.dataset.id)); });
 $("#kNew").addEventListener("click", () => openKunde(null));
-$("#kClose").addEventListener("click", () => { $("#kEdit").hidden = true; editK = null; });
+$("#kBack").addEventListener("click", () => { editK = null; newK = false; go("kunden"); });
+$("#kClose").addEventListener("click", () => { if (editK) { fillKForm(editK); setKTab("dateien"); } else { newK = false; go("kunden"); } });
 const KF = ["name", "vorname", "firma", "ansprech", "strasse", "plz", "ort", "tel", "mobil", "email", "baustellen", "aufmass", "notizen"];
 const KMAP = { ansprech: "ansprechpartner", tel: "telefon" };
+function fillKForm(k) { $("#kForm").reset(); for (const f of KF) $("#k_" + f).value = k?.[KMAP[f] || f] || ""; }
+function setKTab(t) {
+  kTab = t; $$("#kTabs button").forEach(b => b.setAttribute("aria-pressed", b.dataset.t === t));
+  $$(".kpane").forEach(p => p.hidden = p.id !== "kp-" + t);
+}
+$("#kTabs").addEventListener("click", e => { const b = e.target.closest("button"); if (b && !b.disabled) setKTab(b.dataset.t); });
 function openKunde(k) {
-  if (location.hash !== "#kunden") go("kunden");
-  editK = k; $("#kEdit").hidden = false; $("#kForm").reset();
-  for (const f of KF) $("#k_" + f).value = k?.[KMAP[f] || f] || "";
-  $("#kTitle").textContent = k ? kName(k) : "Neuer Kunde"; $("#kNr").textContent = "Nr. " + (k?.nr || nextNr()); $("#kDel").hidden = !k;
-  $("#t_datum").value = today(); renderKExtra(); $("#kEdit").scrollIntoView({ behavior: "smooth", block: "start" }); if (!k) $("#k_name").focus();
+  editK = k; newK = !k; fillKForm(k); $("#t_datum").value = today();
+  go("kunde"); setKTab(k ? "dateien" : "daten"); renderKExtra(); if (!k) $("#k_name").focus();
 }
 function renderKExtra() {
-  $("#kExtra").hidden = !editK; if (!editK) return;
-  editK = kById(editK.id) || editK;
-  const ts = [...(editK.termine || [])].sort((a, b) => (a.datum + (a.zeit || "")).localeCompare(b.datum + (b.zeit || "")));
+  if (!editK) { $("#kTitle").textContent = "Neuer Kunde"; $("#kNr").textContent = "Nr. " + nextNr(); $("#kAddr").textContent = "Trag die Kundendaten ein und tippe auf „Speichern“.";
+    $("#kContact").innerHTML = ""; $("#kActions").hidden = true; $("#kDel").hidden = true; $$("#kTabs button").forEach(b => b.disabled = b.dataset.t !== "daten"); return; }
+  editK = kById(editK.id) || editK; const k = editK;
+  $("#kActions").hidden = false; $("#kDel").hidden = false; $$("#kTabs button").forEach(b => b.disabled = false);
+  $("#kTitle").textContent = kName(k); $("#kNr").textContent = "Kunde Nr. " + (k.nr || "");
+  $("#kAddr").textContent = kAddr(k) || "keine Adresse";
+  const tel = (n, l) => n ? `<a class="btn sm" href="tel:${esc(n.replace(/[^\d+]/g, ""))}">${l} ${esc(n)}</a>` : "";
+  $("#kContact").innerHTML = tel(k.mobil, "Mobil") + tel(k.telefon, "Tel.") + (k.email ? `<a class="btn sm" href="mailto:${esc(k.email)}">${esc(k.email)}</a>` : "") +
+    (kAddr(k) ? `<a class="btn sm" href="https://maps.apple.com/?q=${encodeURIComponent(kAddr(k))}" target="_blank" rel="noopener">Karte</a>` : "");
+  const docs = S.dokumente.filter(d => d.kundeId === k.id).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+  const tr = sortedTrips().filter(t => t.kundeId === k.id).reverse();
+  const ts = [...(k.termine || [])].sort((a, b) => (a.datum + (a.zeit || "")).localeCompare(b.datum + (b.zeit || "")));
+  const lbl = { dateien: `Dateien (${docs.length})`, fahrten: `Fahrten (${tr.length})`, termine: `Termine (${ts.filter(t => t.datum >= today()).length})`, daten: "Kundendaten" };
+  $$("#kTabs button").forEach(b => b.textContent = lbl[b.dataset.t]);
+  $("#kFiles").innerHTML = docs.length ? docs.map(d => `<button class="ftile" data-fid="${d.id}"><div class="fprev">${isImg(d) ? `<img data-thumb="${d.id}" alt="">` : `<span>${esc(extOf(d.filename) || "Datei")}</span>`}</div>
+      <div class="fcap"><b>${esc(d.titel || d.filename)}</b><small>${esc(d.art || "")} · ${fmtDate(d.datum)}${d.betrag != null ? " · " + eur(num(d.betrag)) : ""}</small></div></button>`).join("")
+    : `<div class="empty panel" style="grid-column:1/-1">Noch keine Dateien. Tippe oben auf „Foto aufnehmen“ oder „Datei hinzufügen“ – z. B. Angebote, Rechnungen, Aufmaß, Baustellenfotos.</div>`;
+  $$("#kFiles img[data-thumb]").forEach(async im => { const id = im.dataset.thumb; let u = thumbs.get(id);
+    if (!u) { const d = S.dokumente.find(x => x.id === id); try { u = URL.createObjectURL(await getDocBlob(d)); thumbs.set(id, u); } catch { im.replaceWith(Object.assign(document.createElement("span"), { textContent: "Bild" })); return; } }
+    im.src = u; });
+  $("#kTrips").innerHTML = tr.length ? `<p class="note" style="margin-bottom:8px">${tr.length} Fahrten · ${fmtNum(tr.reduce((s, t) => s + (num(t.km) || 0), 0))} km</p><div class="tw"><table><thead><tr><th>Datum</th><th>Start</th><th>Ziel</th><th>Anlass</th><th class="n">km</th></tr></thead><tbody>` +
+    tr.map(t => `<tr class="click" data-trip="${t.id}"><td class="d">${fmtDate(t.datum)}</td><td>${esc(t.start)}</td><td>${esc(t.ziel)}</td><td>${esc(t.anlass)}</td><td class="n">${fmtNum(num(t.km))}</td></tr>`).join("") + `</tbody></table></div>`
+    : `<div class="empty panel">Noch keine Fahrten zu diesem Kunden. Tippe oben auf „Fahrt eintragen“.</div>`;
   $("#kTermine").innerHTML = ts.length ? ts.map(t => `<li${t.datum < today() ? ' class="muted"' : ""}><span class="d">${fmtDate(t.datum)}${t.zeit ? " · " + t.zeit : ""}</span><span class="grow">${esc(t.text)}</span><button class="btn sm del" data-tdel="${t.id}">Entfernen</button></li>`).join("") : `<li class="muted">Keine Termine.</li>`;
-  const docs = S.dokumente.filter(d => d.kundeId === editK.id).sort((a, b) => (b.datum || "").localeCompare(a.datum || ""));
-  $("#kDocs").innerHTML = docs.length ? docs.map(docLi).join("") : `<li class="muted">Noch keine Dokumente oder Fotos.</li>`;
-  const tr = sortedTrips().filter(t => t.kundeId === editK.id).reverse();
-  $("#kTrips").innerHTML = tr.length ? `<h3>Fahrten zu diesem Kunden · ${fmtNum(tr.reduce((s, t) => s + (num(t.km) || 0), 0))} km</h3><div class="tw"><table><thead><tr><th>Datum</th><th>Start</th><th>Ziel</th><th>Anlass</th><th class="n">km</th></tr></thead><tbody>` +
-    tr.map(t => `<tr><td class="d">${fmtDate(t.datum)}</td><td>${esc(t.start)}</td><td>${esc(t.ziel)}</td><td>${esc(t.anlass)}</td><td class="n">${fmtNum(num(t.km))}</td></tr>`).join("") + `</tbody></table></div>`
-    : `<h3>Fahrten</h3><p class="note">Noch keine Fahrten mit diesem Kunden verknüpft.</p>`;
 }
-function docLi(d) { return `<li><span class="d">${fmtDate(d.datum)}</span><span class="pill">${esc(d.art || "Datei")}</span><span class="grow">${esc(d.titel || d.filename)}${d.nummer ? ` <span class="nr">Nr. ${esc(d.nummer)}</span>` : ""}</span>${d.betrag != null ? `<span class="nr">${eur(num(d.betrag))}</span>` : ""}<button class="btn sm" data-doc="${d.id}">Öffnen</button></li>`; }
-$("#kDocs").addEventListener("click", e => { const b = e.target.closest("[data-doc]"); if (b) openDoc(b.dataset.doc); });
+$("#kFiles").addEventListener("click", e => { const b = e.target.closest("[data-fid]"); if (b) openViewer(b.dataset.fid); });
+$("#kTrips").addEventListener("click", e => { const r = e.target.closest("[data-trip]"); if (r) { go("fahrten"); loadTrip(S.fahrten.find(t => t.id === r.dataset.trip)); } });
+$("#kTrip").addEventListener("click", () => { const k = editK; if (!k) return;
+  go("fahrten"); resetTripForm({ datum: today(), start: (S.settings.orte || [])[0] || "Zuhause", ziel: kAddr(k) || kName(k), kunde: kName(k), anlass: "", art: "g" }, "Neue Fahrt zu " + kName(k));
+  setTimeout(() => $("#f_km").focus(), 50); });
 $("#kTermine").addEventListener("click", async e => { const b = e.target.closest("[data-tdel]"); if (!b) return;
   const k = { ...editK, termine: (editK.termine || []).filter(t => t.id !== b.dataset.tdel) }; await safe(Store.put("kunden", k), "Termin entfernt"); editK = k; renderKExtra(); });
 $("#tForm").addEventListener("submit", async e => { e.preventDefault(); if (!editK) return;
   const k = { ...editK, termine: [...(editK.termine || []), { id: uid(), datum: $("#t_datum").value, zeit: $("#t_zeit").value, text: $("#t_text").value.trim() }] };
   await safe(Store.put("kunden", k), "Termin gespeichert"); editK = k; $("#t_text").value = ""; $("#t_zeit").value = ""; renderKExtra(); });
 $("#kForm").addEventListener("submit", async e => {
-  e.preventDefault(); const k = { ...(editK || { createdAt: Date.now(), nr: String(nextNr()) }) };
+  e.preventDefault(); const isNew = !editK; const k = { ...(editK || { createdAt: Date.now(), nr: String(nextNr()) }) };
   for (const f of KF) k[KMAP[f] || f] = $("#k_" + f).value.trim();
   if (!k.name && !k.firma) { toast("Bitte Name oder Firma eintragen."); return; }
-  await safe(Store.put("kunden", k), editK ? "Kunde gespeichert" : "Kunde angelegt"); editK = k; $("#kTitle").textContent = kName(k); $("#kDel").hidden = false; renderKExtra();
+  await safe(Store.put("kunden", k), isNew ? "Kunde angelegt" : "Kunde gespeichert"); editK = k; newK = false; renderKExtra(); setKTab("dateien");
 });
-$("#kDel").addEventListener("click", e => armDelete(e.currentTarget, async () => { await safe(Store.del("kunden", editK.id), "Kunde gelöscht"); $("#kEdit").hidden = true; editK = null; }));
-$("#kUp").addEventListener("change", e => { const f = [...e.target.files]; e.target.value = ""; if (editK) uploadDocs(f, editK.id); });
+$("#kDel").addEventListener("click", e => armDelete(e.currentTarget, async () => { await safe(Store.del("kunden", editK.id), "Kunde gelöscht"); editK = null; go("kunden"); }));
+$("#kUp").addEventListener("change", e => { const f = [...e.target.files]; e.target.value = ""; if (editK) uploadDocs(f, editK.id).then(() => setKTab("dateien")); });
+$("#kCam").addEventListener("change", e => { const f = [...e.target.files].map(x => /^image\.|^IMG_|^image$/i.test(x.name) || !x.name ? new File([x], `Foto_${today()}_${new Date().toTimeString().slice(0, 5).replace(":", "-")}.jpg`, { type: x.type || "image/jpeg" }) : x);
+  e.target.value = ""; if (editK) uploadDocs(f, editK.id).then(() => setKTab("dateien")); });
+
+/* ---------- Datei-Ansicht ---------- */
+let viewDoc = null, viewUrl = null;
+async function openViewer(id) {
+  const d = S.dokumente.find(x => x.id === id); if (!d) return; viewDoc = d;
+  $("#vName").textContent = d.titel || d.filename; $("#vBody").innerHTML = `<p class="muted">Wird geladen …</p>`; $("#viewer").hidden = false;
+  try {
+    const blob = await getDocBlob(d); if (viewUrl) URL.revokeObjectURL(viewUrl); viewUrl = URL.createObjectURL(blob);
+    const ext = extOf(d.filename);
+    if (isImg(d)) $("#vBody").innerHTML = `<img src="${viewUrl}" alt="${esc(d.titel || d.filename)}">`;
+    else if (ext === "pdf") $("#vBody").innerHTML = `<iframe src="${viewUrl}" title="${esc(d.filename)}"></iframe>`;
+    else if (["txt", "csv", "md"].includes(ext)) $("#vBody").innerHTML = `<pre style="white-space:pre-wrap;align-self:flex-start;max-width:100%">${esc(await blob.text())}</pre>`;
+    else $("#vBody").innerHTML = `<div class="empty"><p><b>${esc(d.filename)}</b> · ${fmtSize(d.size || blob.size)}</p><p>Diese Datei kann hier nicht angezeigt werden.<br>Tippe auf „Teilen / Sichern“, um sie z. B. in Word, Excel oder „Dateien“ zu öffnen.</p></div>`;
+  } catch (e) { $("#vBody").innerHTML = `<div class="empty">${esc(e?.message || e)}</div>`; }
+}
+function closeViewer() { $("#viewer").hidden = true; $("#vBody").innerHTML = ""; if (viewUrl) { URL.revokeObjectURL(viewUrl); viewUrl = null; } }
+$("#vClose").addEventListener("click", closeViewer);
+$("#vShare").addEventListener("click", () => viewDoc && downloadDoc(viewDoc));
+$("#vEdit").addEventListener("click", () => { const id = viewDoc?.id; closeViewer(); if (id) openDoc(id); });
 
 /* ---------- Dokumente ---------- */
 const DART = ["Angebot", "Auftrag", "Rechnung", "Eingangsrechnung", "Lieferschein", "Foto", "Plan / Zeichnung", "Vertrag", "Sonstiges"];
@@ -843,7 +939,7 @@ function openDoc(id) {
   if (isImg(d)) getDocBlob(d).then(b => { const im = $("#dThumb"); if (im) { im.src = URL.createObjectURL(b); im.hidden = false; } }).catch(() => {});
   $("#dRead")?.addEventListener("click", async e => { const b = e.currentTarget; b.disabled = true; b.textContent = "Wird ausgelesen …";
     try { await readDoc(editDoc, null, false); toast("Ausgelesen – bitte prüfen"); } catch (err) { toast(aiErr(err), 4000); b.disabled = false; b.textContent = "Mit Claude auslesen"; } });
-  $("#dToK")?.addEventListener("click", () => openKunde(kById(editDoc.kundeId)));
+  $("#dToK")?.addEventListener("click", () => { $("#dEdit").hidden = true; openKunde(kById(editDoc.kundeId)); });
   $("#dClose").addEventListener("click", () => { box.hidden = true; editDoc = null; });
   $("#dDel").addEventListener("click", e => armDelete(e.currentTarget, async () => {
     const d = editDoc; await safe(Store.del("dokumente", d.id), "Dokument gelöscht"); try { await idbDel("files", d.assetId); } catch {}
@@ -1073,11 +1169,11 @@ function renderHints() {
 
 /* ---------- Start ---------- */
 let ready = false;
-function renderAll() { renderKunden(); renderFahrten(); renderDocs(); if (editK) renderKExtra();
+function renderAll() { renderKunden(); renderFahrten(); renderDocs(); if (!$("#v-kunde").hidden) renderKExtra();
   renderHints(); }
 resetTripForm(); show(location.hash.slice(1)); renderAll();
 Store.init().then(() => { ready = true; renderAll(); });
-CAP.assets = true; $("#kUpLbl").hidden = false;
+CAP.assets = true;
 try { navigator.storage?.persist?.(); } catch {}
 if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
 })();
