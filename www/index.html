@@ -145,6 +145,8 @@ details summary{cursor:pointer;font-weight:600}
 .vbody{flex:1;overflow:auto;display:flex;align-items:center;justify-content:center;padding:12px;-webkit-overflow-scrolling:touch}
 .vbody img{max-width:100%;max-height:100%;object-fit:contain}
 .vbody iframe{width:100%;height:100%;border:0;background:#fff}
+.modal{position:fixed;inset:0;z-index:40;background:rgb(0 0 0 / .45);display:flex;align-items:center;justify-content:center;padding:16px}
+.mbox{width:100%;max-width:480px;box-shadow:0 10px 40px rgb(0 0 0 / .25)}
 .ccard .files{color:var(--accent);font-weight:600}
 @media (prefers-reduced-motion:no-preference){.toast{animation:up .2s ease-out}@keyframes up{from{opacity:0;transform:translate(-50%,8px)}}
   .btn.rec{animation:pulse 1.2s ease-in-out infinite}@keyframes pulse{50%{filter:brightness(1.25)}}}
@@ -243,7 +245,13 @@ details summary{cursor:pointer;font-weight:600}
     <span class="nr" id="kNr"></span>
   </div>
   <div class="panel khead">
-    <h2 id="kTitle">Neuer Kunde</h2>
+    <div class="row between" style="align-items:flex-start">
+      <h2 id="kTitle" style="flex:1 1 240px;min-width:0">Neuer Kunde</h2>
+      <div class="row" id="kManage">
+        <button class="btn" id="kEditBtn">Bearbeiten</button>
+        <button class="btn del" id="kDelTop">Löschen</button>
+      </div>
+    </div>
     <p class="muted" id="kAddr" style="margin:4px 0 0"></p>
     <div class="row" id="kContact" style="margin-top:8px"></div>
     <div class="row" id="kActions" style="margin-top:12px">
@@ -294,6 +302,20 @@ details summary{cursor:pointer;font-weight:600}
     </form>
   </div>
 </section>
+
+<!-- KUNDE LÖSCHEN -->
+<div class="modal" id="delDlg" hidden>
+  <div class="panel mbox" role="dialog" aria-modal="true" aria-labelledby="delTitle">
+    <h3 id="delTitle">Kunde löschen?</h3>
+    <p id="delText" class="note" style="margin-bottom:10px"></p>
+    <label id="delFilesLbl" style="flex-direction:row;align-items:center;gap:8px;text-transform:none;letter-spacing:0;font-size:.95rem;color:var(--fg);margin-bottom:10px"><input type="checkbox" id="delFiles" style="width:auto"><span id="delFilesTxt"></span></label>
+    <p class="note" style="margin-bottom:14px">Das kann nicht rückgängig gemacht werden. Tipp: vorher unter „Import / Export“ eine Sicherung machen.</p>
+    <div class="row" style="justify-content:flex-end">
+      <button class="btn" id="delCancel">Abbrechen</button>
+      <button class="btn del arm" id="delOk">Endgültig löschen</button>
+    </div>
+  </div>
+</div>
 
 <!-- DATEI-ANSICHT -->
 <div class="viewer" id="viewer" hidden>
@@ -730,9 +752,9 @@ function openKunde(k) {
 }
 function renderKExtra() {
   if (!editK) { $("#kTitle").textContent = "Neuer Kunde"; $("#kNr").textContent = "Nr. " + nextNr(); $("#kAddr").textContent = "Trag die Kundendaten ein und tippe auf „Speichern“.";
-    $("#kContact").innerHTML = ""; $("#kActions").hidden = true; $("#kDel").hidden = true; $$("#kTabs button").forEach(b => b.disabled = b.dataset.t !== "daten"); return; }
+    $("#kContact").innerHTML = ""; $("#kActions").hidden = true; $("#kManage").hidden = true; $("#kDel").hidden = true; $$("#kTabs button").forEach(b => b.disabled = b.dataset.t !== "daten"); return; }
   editK = kById(editK.id) || editK; const k = editK;
-  $("#kActions").hidden = false; $("#kDel").hidden = false; $$("#kTabs button").forEach(b => b.disabled = false);
+  $("#kActions").hidden = false; $("#kManage").hidden = false; $("#kDel").hidden = false; $$("#kTabs button").forEach(b => b.disabled = false);
   $("#kTitle").textContent = kName(k); $("#kNr").textContent = "Kunde Nr. " + (k.nr || "");
   $("#kAddr").textContent = kAddr(k) || "keine Adresse";
   const tel = (n, l) => n ? `<a class="btn sm" href="tel:${esc(n.replace(/[^\d+]/g, ""))}">${l} ${esc(n)}</a>` : "";
@@ -770,7 +792,34 @@ $("#kForm").addEventListener("submit", async e => {
   if (!k.name && !k.firma) { toast("Bitte Name oder Firma eintragen."); return; }
   await safe(Store.put("kunden", k), isNew ? "Kunde angelegt" : "Kunde gespeichert"); editK = k; newK = false; renderKExtra(); setKTab("dateien");
 });
-$("#kDel").addEventListener("click", e => armDelete(e.currentTarget, async () => { await safe(Store.del("kunden", editK.id), "Kunde gelöscht"); editK = null; go("kunden"); }));
+$("#kEditBtn").addEventListener("click", () => { setKTab("daten"); $("#kp-daten").scrollIntoView({ behavior: "smooth", block: "start" }); setTimeout(() => $("#k_name").focus({ preventScroll: true }), 300); });
+function askDelete() {
+  const k = editK; if (!k) return;
+  const nT = S.fahrten.filter(t => t.kundeId === k.id).length, nD = S.dokumente.filter(d => d.kundeId === k.id).length;
+  $("#delTitle").textContent = `„${kName(k)}“ löschen?`;
+  $("#delText").textContent = nT ? `Die ${nT} Fahrten zu diesem Kunden bleiben im Fahrtenbuch erhalten – mit dem Namen als Text.` : "Zu diesem Kunden gibt es keine Fahrten.";
+  $("#delFilesLbl").hidden = !nD; $("#delFiles").checked = false;
+  $("#delFilesTxt").textContent = `Auch die ${nD} ${nD === 1 ? "Datei" : "Dateien"} dieses Kunden löschen (sonst bleiben sie unter „Alle Dateien“)`;
+  $("#delDlg").hidden = false; $("#delCancel").focus();
+}
+async function deleteKunde(k, withFiles) {
+  const name = kName(k);
+  const trips = S.fahrten.filter(t => t.kundeId === k.id).map(t => ({ ...t, kundeId: null, kunde: t.kunde || name }));
+  if (trips.length) await Store.putMany("fahrten", trips);
+  const docs = S.dokumente.filter(d => d.kundeId === k.id);
+  if (withFiles) for (const d of docs) { await Store.del("dokumente", d.id); try { await idbDel("files", d.assetId); } catch {} const u = thumbs.get(d.id); if (u) { URL.revokeObjectURL(u); thumbs.delete(d.id); } }
+  else if (docs.length) await Store.putMany("dokumente", docs.map(d => ({ ...d, kundeId: null, kunde: d.kunde || name })));
+  await Store.del("kunden", k.id);
+}
+$("#kDelTop").addEventListener("click", askDelete);
+$("#kDel").addEventListener("click", askDelete);
+$("#delCancel").addEventListener("click", () => $("#delDlg").hidden = true);
+$("#delDlg").addEventListener("click", e => { if (e.target.id === "delDlg") $("#delDlg").hidden = true; });
+$("#delOk").addEventListener("click", async () => {
+  const k = editK; if (!k) return; $("#delOk").disabled = true;
+  await safe(deleteKunde(k, $("#delFiles").checked), `„${kName(k)}“ gelöscht`);
+  $("#delOk").disabled = false; $("#delDlg").hidden = true; editK = null; newK = false; go("kunden");
+});
 $("#kUp").addEventListener("change", e => { const f = [...e.target.files]; e.target.value = ""; if (editK) uploadDocs(f, editK.id).then(() => setKTab("dateien")); });
 $("#kCam").addEventListener("change", e => { const f = [...e.target.files].map(x => /^image\.|^IMG_|^image$/i.test(x.name) || !x.name ? new File([x], `Foto_${today()}_${new Date().toTimeString().slice(0, 5).replace(":", "-")}.jpg`, { type: x.type || "image/jpeg" }) : x);
   e.target.value = ""; if (editK) uploadDocs(f, editK.id).then(() => setKTab("dateien")); });

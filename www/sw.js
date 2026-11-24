@@ -1,5 +1,5 @@
 // Offline-Cache: Die App startet auch ohne Internet (z. B. auf der Baustelle).
-const CACHE = 'fahrtenbuch-v3';
+const CACHE = 'fahrtenbuch-v4';
 const FILES = ['./', './index.html', './manifest.webmanifest', './vendor/xlsx.full.min.js',
   './icons/icon-180.png', './icons/icon-192.png', './icons/icon-512.png'];
 
